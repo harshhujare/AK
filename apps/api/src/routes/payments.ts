@@ -1,0 +1,131 @@
+import { Router, Request, Response } from 'express';
+import { prisma } from '../lib/prisma';
+import { requireAuth } from '../middleware/auth';
+import { createRazorpayOrder, verifyRazorpaySignature, verifyWebhookSignature } from '../services/razorpay';
+import { CreateOrderSchema, VerifyPaymentSchema } from '@ajitsir/shared';
+
+export const paymentsRouter = Router();
+
+// Plan pricing config (paise)
+const PLAN_PRICING: Record<string, number> = {
+  '30': 49900,   // ₹499 / month
+  '180': 249900, // ₹2499 / 6 months
+  '365': 399900, // ₹3999 / year
+};
+
+// POST /api/payments/create-order
+paymentsRouter.post('/create-order', requireAuth(), async (req: Request, res: Response) => {
+  const parsed = CreateOrderSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+    return;
+  }
+
+  const planDuration = parseInt(parsed.data.planDuration);
+  const amount = PLAN_PRICING[parsed.data.planDuration];
+  if (!amount) {
+    res.status(400).json({ error: 'Invalid plan duration' });
+    return;
+  }
+
+  const order = await createRazorpayOrder({
+    amount,
+    receipt: `rcpt_${req.user!.userId}_${Date.now()}`,
+  });
+
+  // Save pending payment record
+  await prisma.payment.create({
+    data: {
+      userId: req.user!.userId,
+      razorpayOrderId: order.id,
+      amount,
+      status: 'PENDING',
+      planDuration,
+    },
+  });
+
+  res.json({
+    data: {
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      keyId: process.env.RAZORPAY_KEY_ID,
+    },
+  });
+});
+
+// POST /api/payments/verify
+paymentsRouter.post('/verify', requireAuth(), async (req: Request, res: Response) => {
+  const parsed = VerifyPaymentSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+    return;
+  }
+
+  const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = parsed.data;
+
+  // Server-side HMAC verification — never trust client
+  const valid = verifyRazorpaySignature(razorpayOrderId, razorpayPaymentId, razorpaySignature);
+  if (!valid) {
+    res.status(400).json({ error: 'Payment verification failed — invalid signature' });
+    return;
+  }
+
+  const payment = await prisma.payment.findUnique({ where: { razorpayOrderId } });
+  if (!payment || payment.userId !== req.user!.userId) {
+    res.status(404).json({ error: 'Order not found' });
+    return;
+  }
+
+  // Upgrade plan
+  const planExpiresAt = new Date();
+  planExpiresAt.setDate(planExpiresAt.getDate() + payment.planDuration);
+
+  await prisma.$transaction([
+    prisma.payment.update({
+      where: { razorpayOrderId },
+      data: { razorpayPaymentId, status: 'SUCCESS' },
+    }),
+    prisma.user.update({
+      where: { id: req.user!.userId },
+      data: { plan: 'PAID', planExpiresAt },
+    }),
+  ]);
+
+  res.json({ data: { message: 'Payment successful. Subscription activated.', planExpiresAt } });
+});
+
+// POST /api/payments/webhook — Razorpay async events
+paymentsRouter.post('/webhook', async (req: Request, res: Response) => {
+  const signature = req.headers['x-razorpay-signature'] as string;
+  if (!signature) {
+    res.status(400).json({ error: 'Missing webhook signature' });
+    return;
+  }
+
+  const rawBody = JSON.stringify(req.body);
+  const valid = verifyWebhookSignature(rawBody, signature);
+  if (!valid) {
+    res.status(400).json({ error: 'Invalid webhook signature' });
+    return;
+  }
+
+  const event = req.body.event;
+  const orderId = req.body.payload?.payment?.entity?.order_id;
+
+  if (event === 'payment.captured' && orderId) {
+    await prisma.payment.updateMany({
+      where: { razorpayOrderId: orderId, status: 'PENDING' },
+      data: { status: 'SUCCESS' },
+    });
+  }
+
+  if (event === 'payment.failed' && orderId) {
+    await prisma.payment.updateMany({
+      where: { razorpayOrderId: orderId },
+      data: { status: 'FAILED' },
+    });
+  }
+
+  res.json({ status: 'ok' });
+});

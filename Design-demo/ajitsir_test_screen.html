@@ -1,0 +1,126 @@
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap');
+  .pg{font-family:'DM Sans',sans-serif;background:#FAFAFA;color:#0A0A0A;padding:0;}
+  .test-top{display:flex;align-items:center;justify-content:space-between;padding:14px 28px;border-bottom:1px solid #E8E8E8;}
+  .test-title{font-size:14px;font-weight:500;}
+  .test-meta-top{font-size:12px;color:#888;}
+  .timer{display:flex;align-items:center;gap:6px;font-family:'DM Serif Display',serif;font-size:22px;color:#D94F3D;}
+  .timer-label{font-size:11px;color:#888;font-family:'DM Sans',sans-serif;}
+  .progress-bar{height:2px;background:#E8E8E8;}
+  .progress-fill{height:2px;background:#0A0A0A;width:28%;}
+  .test-body{display:grid;grid-template-columns:1fr 220px;}
+  .q-area{padding:36px 32px;border-right:1px solid #E8E8E8;}
+  .q-num{font-size:11px;color:#888;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:16px;}
+  .q-text{font-family:'DM Serif Display',serif;font-size:20px;line-height:1.5;margin-bottom:32px;letter-spacing:-0.2px;}
+  .options{display:flex;flex-direction:column;gap:10px;}
+  .option{display:flex;align-items:center;gap:14px;padding:14px 18px;border:1px solid #E8E8E8;cursor:pointer;transition:border-color 0.15s;}
+  .option:hover{border-color:#0A0A0A;}
+  .option.selected{border-color:#0A0A0A;background:#F5F5F5;}
+  .opt-key{width:28px;height:28px;border:1px solid #DDD;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;flex-shrink:0;}
+  .option.selected .opt-key{background:#0A0A0A;color:#FAFAFA;border-color:#0A0A0A;}
+  .opt-text{font-size:14px;line-height:1.5;}
+  .q-nav{display:flex;align-items:center;justify-content:space-between;margin-top:36px;padding-top:24px;border-top:1px solid #E8E8E8;}
+  .btn-prev{font-size:13px;border:1px solid #DDD;padding:10px 20px;background:none;font-family:'DM Sans',sans-serif;cursor:pointer;color:#888;}
+  .btn-next{font-size:13px;padding:10px 24px;background:#0A0A0A;color:#FAFAFA;border:none;font-family:'DM Sans',sans-serif;cursor:pointer;}
+  .sidebar-panel{padding:24px 18px;}
+  .panel-label{font-size:11px;color:#888;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:14px;}
+  .q-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:24px;}
+  .q-dot{width:30px;height:30px;border:1px solid #E8E8E8;display:flex;align-items:center;justify-content:center;font-size:11px;color:#888;cursor:pointer;}
+  .q-dot.done{background:#0A0A0A;color:#FAFAFA;border-color:#0A0A0A;}
+  .q-dot.current{border-color:#D94F3D;color:#D94F3D;}
+  .submit-btn{width:100%;padding:13px;background:#D94F3D;color:#FAFAFA;border:none;font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;letter-spacing:0.03em;margin-top:8px;}
+  .legend{display:flex;flex-direction:column;gap:8px;margin-bottom:20px;}
+  .leg-row{display:flex;align-items:center;gap:8px;font-size:12px;color:#888;}
+  .leg-dot{width:10px;height:10px;border:1px solid #E8E8E8;}
+  .leg-dot.done{background:#0A0A0A;border-color:#0A0A0A;}
+  .leg-dot.current{border:1px solid #D94F3D;}
+</style>
+<div class="pg">
+  <div class="test-top">
+    <div>
+      <div class="test-title">Child Development — Paper I</div>
+      <div class="test-meta-top">30 questions · Question 8 of 30</div>
+    </div>
+    <div style="text-align:center;">
+      <div class="timer-label">Time remaining</div>
+      <div class="timer"><i class="ti ti-clock" style="font-size:18px;" aria-hidden="true"></i>38:14</div>
+    </div>
+    <div style="text-align:right;">
+      <button style="font-size:12px;border:1px solid #DDD;padding:7px 14px;background:none;font-family:'DM Sans',sans-serif;cursor:pointer;color:#888;">Save & exit</button>
+    </div>
+  </div>
+  <div class="progress-bar"><div class="progress-fill"></div></div>
+
+  <div class="test-body">
+    <div class="q-area">
+      <div class="q-num">Question 8 / 30</div>
+      <div class="q-text">According to Piaget's theory, at which stage does a child develop the concept of object permanence?</div>
+      <div class="options">
+        <div class="option" onclick="this.parentElement.querySelectorAll('.option').forEach(o=>o.classList.remove('selected'));this.classList.add('selected');this.querySelector('.opt-key').style.background='#0A0A0A';this.querySelector('.opt-key').style.color='#FAFAFA';">
+          <div class="opt-key">A</div>
+          <div class="opt-text">Pre-operational stage</div>
+        </div>
+        <div class="option selected">
+          <div class="opt-key" style="background:#0A0A0A;color:#FAFAFA;border-color:#0A0A0A;">B</div>
+          <div class="opt-text">Sensorimotor stage</div>
+        </div>
+        <div class="option">
+          <div class="opt-key">C</div>
+          <div class="opt-text">Concrete operational stage</div>
+        </div>
+        <div class="option">
+          <div class="opt-key">D</div>
+          <div class="opt-text">Formal operational stage</div>
+        </div>
+      </div>
+      <div class="q-nav">
+        <button class="btn-prev">← Previous</button>
+        <span style="font-size:12px;color:#888;">7 answered · 22 remaining</span>
+        <button class="btn-next">Next →</button>
+      </div>
+    </div>
+
+    <div class="sidebar-panel">
+      <div class="panel-label">Questions</div>
+      <div class="legend">
+        <div class="leg-row"><div class="leg-dot done"></div>Answered</div>
+        <div class="leg-row"><div class="leg-dot current"></div>Current</div>
+        <div class="leg-row"><div class="leg-dot"></div>Not visited</div>
+      </div>
+      <div class="q-grid">
+        <div class="q-dot done">1</div>
+        <div class="q-dot done">2</div>
+        <div class="q-dot done">3</div>
+        <div class="q-dot done">4</div>
+        <div class="q-dot done">5</div>
+        <div class="q-dot done">6</div>
+        <div class="q-dot done">7</div>
+        <div class="q-dot current">8</div>
+        <div class="q-dot">9</div>
+        <div class="q-dot">10</div>
+        <div class="q-dot">11</div>
+        <div class="q-dot">12</div>
+        <div class="q-dot">13</div>
+        <div class="q-dot">14</div>
+        <div class="q-dot">15</div>
+        <div class="q-dot">16</div>
+        <div class="q-dot">17</div>
+        <div class="q-dot">18</div>
+        <div class="q-dot">19</div>
+        <div class="q-dot">20</div>
+        <div class="q-dot">21</div>
+        <div class="q-dot">22</div>
+        <div class="q-dot">23</div>
+        <div class="q-dot">24</div>
+        <div class="q-dot">25</div>
+        <div class="q-dot">26</div>
+        <div class="q-dot">27</div>
+        <div class="q-dot">28</div>
+        <div class="q-dot">29</div>
+        <div class="q-dot">30</div>
+      </div>
+      <button class="submit-btn">Submit test</button>
+    </div>
+  </div>
+</div>

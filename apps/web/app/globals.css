@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+:root {
+  --black: #0a0a0a;
+  --white: #ffffff;
+  --gray-50: #f8f8f7;
+  --gray-100: #efefed;
+  --gray-200: #ddddd9;
+  --gray-400: #9a9994;
+  --gray-600: #5a5a57;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans), 'DM Sans', sans-serif;
+  background: var(--white);
+  color: var(--black);
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-serif {
+  font-family: var(--font-serif), 'Playfair Display', serif;
+}

@@ -1,0 +1,409 @@
+# AjitSir Academy — MVP Phase 1 Implementation Plan
+
+## Overview
+
+Build the first production-ready version of AjitSir Academy — a mobile-first ed-tech platform for Maharashtra TET students. The MVP is centred around a **secure notes viewing system**, a homepage with an **announcement/video slider**, and a full **admin content management panel**.
+
+This plan is designed to handle **1,000 concurrent users** without issues.
+
+---
+
+## ✅ Confirmed Decisions (All Questions Answered)
+
+| # | Question | Decision |
+|---|---|---|
+| Q1 | Notes access model | **Free for all logged-in users** (freemium in v2) |
+| Q2 | Auth methods | **Google Sign-In only** (no fake emails; email+password in v2) |
+| Q3 | Slider content | **Option C** — both YouTube embeds + announcement cards |
+| Q4 | Screenshot protection | **Level 3** — browser mitigations + dynamic watermark |
+| Q5 | Admin roles | **3 roles**: Super Admin, Content Manager, Student |
+| Q6 | File storage | **AWS S3** (instead of Cloudflare R2 — same SDK, minor config change) |
+| Q7 | Subjects | Default 5 subjects (Child Dev, Marathi, English, Maths, EVS) |
+
+---
+
+## Screenshot CSS — Honest Technical Assessment
+
+You asked about this CSS:
+```css
+.protected-content {
+  -webkit-user-select: none;
+  user-select: none;
+}
+* {
+  -webkit-touch-callout: none;
+}
+```
+
+### What it actually does ✅
+
+| Property | What it does |
+|---|---|
+| `user-select: none` | Prevents text selection and Ctrl+C copy of text — **genuinely useful** |
+| `-webkit-touch-callout: none` | Prevents iOS "tap & hold" menu (Save Image, Copy) — **genuinely useful on iPhone** |
+
+### What the comment gets wrong ❌
+
+> "This blacks out content when screenshots are taken on some OS"
+
+**This is a myth.** Neither property blacks out content during screenshots on any mainstream OS:
+- **Windows** (Print Screen, Win+Shift+S) — not blocked, content visible
+- **macOS** (Cmd+Shift+3/4) — not blocked, content visible  
+- **Android** (Power+Volume) — not blocked, content visible
+- **iOS** (Side button+Volume) — not blocked, content visible
+
+The only way to black out a web view from OS screenshots is `FLAG_SECURE` in a **native Android/iOS app** — it doesn't exist in a browser.
+
+### What we'll actually implement ✅
+
+We will include your CSS properties **plus** the full Level 3 stack:
+
+```
+1. user-select: none          → blocks text copy  
+2. -webkit-touch-callout: none → blocks iOS tap-hold  
+3. Keyboard blocker           → Ctrl+S, Ctrl+P, Ctrl+A, Ctrl+C on the viewer  
+4. Right-click disabled       → on the canvas element  
+5. @media print { display:none } → blocks browser print-to-PDF  
+6. Canvas rendering (PDF.js)  → PDF is rendered as pixels, not as a selectable/saveable file  
+7. Dynamic watermark          → user name + masked email burned on every page  
+8. 5-minute signed URL        → even if intercepted, URL expires quickly  
+```
+
+> [!NOTE]
+> The **watermark is the real security backbone**. A student who shares a screenshot exposes themselves. This deterrent is why platforms like Unacademy use it — not because they can prevent OS screenshots, but because they can *identify who leaked it*.
+
+---
+
+## Architecture Decisions (Confirmed)
+
+- **Frontend:** Next.js 14 App Router (already set up at `apps/web/`)
+- **Backend:** Express API (already set up at `apps/api/`) — auth, notes, admin routes already exist
+- **Database:** PostgreSQL via Prisma (schema already migrated, models ready)
+- **Notes Storage:** **AWS S3** (same `@aws-sdk/client-s3` SDK — just change endpoint config in `.env`)
+- **Secure Viewer:** PDF.js rendered on `<canvas>` — never exposes the raw file URL to the browser
+- **Auth:** **Google Sign-In only** (Google Identity Services → ID token → `POST /api/auth/google`)
+- **Mobile-first:** All pages designed for mobile first, then scaled up to desktop
+
+### 3-Role System
+
+| Role | Access |
+|---|---|
+| `SUPER_ADMIN` | Everything — users, content, other admin accounts |
+| `CONTENT_MANAGER` | Upload/edit notes, manage announcements & subjects — no user management |
+| `STUDENT` | View notes (all, since MVP has no gating), view homepage |
+
+---
+
+## Proposed Changes
+
+### Backend (`apps/api/`)
+
+---
+
+#### [MODIFY] `apps/api/prisma/schema.prisma`
+
+Changes:
+- Add `CONTENT_MANAGER` to the `Role` enum (currently only `STUDENT` and `ADMIN`; rename `ADMIN` to `SUPER_ADMIN` or add `CONTENT_MANAGER` alongside)
+- Add `Announcement` model
+- Add `NoteView` model
+- Add `description`, `pageCount`, `thumbnailKey` fields to `Note`
+
+Add two new models:
+
+**`Announcement`** — for the hero slider (YouTube links or text announcements):
+```prisma
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  type        AnnouncementType @default(TEXT)
+  youtubeUrl  String?          // YouTube video URL (if type = VIDEO)
+  imageKey    String?          // R2 key for announcement image (optional)
+  isActive    Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
+enum AnnouncementType { TEXT VIDEO }
+```
+
+**`NoteView`** — audit log of note views (for analytics, abuse detection):
+```prisma
+model NoteView {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  noteId    String
+  note      Note     @relation(fields: [noteId], references: [id])
+  viewedAt  DateTime @default(now())
+}
+```
+
+Also add `description`, `pageCount`, and `thumbnailKey` to the `Note` model for richer UI display.
+
+---
+
+#### [NEW] `apps/api/src/routes/announcements.ts`
+| Route | Auth | Description |
+|---|---|---|
+| `GET /api/announcements` | Public | List active announcements (ordered) |
+| `POST /api/announcements` | Admin | Create announcement |
+| `PATCH /api/announcements/:id` | Admin | Update / reorder / deactivate |
+| `DELETE /api/announcements/:id` | Admin | Delete announcement |
+
+---
+
+#### [MODIFY] `apps/api/src/routes/notes.ts`
+- Add `GET /api/notes/:id/view-token` — returns a **short-lived (5 min) signed URL** specifically for the secure canvas viewer. This is separate from the download endpoint and never exposes the raw PDF URL in a way that allows saving.
+- Add `POST /api/notes/:id/log-view` — records a `NoteView` entry for audit purposes.
+- Remove plan-gating check for MVP (all authenticated users can view all notes).
+
+#### [MODIFY] `apps/api/src/services/r2.ts` → rename to `storage.ts`
+- Switch from Cloudflare R2 config to **AWS S3**
+- Change: remove `R2_ENDPOINT`, use standard AWS region-based endpoint
+- New env vars needed in `.env`: `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_BUCKET_NAME`
+- All function signatures stay identical (`uploadToS3`, `getS3SignedUrl`, `deleteFromS3`)
+
+---
+
+### Frontend (`apps/web/`)
+
+---
+
+#### Design System / Global Styles
+
+#### [MODIFY] `apps/web/app/globals.css`
+- Mobile-first CSS reset and base styles
+- Responsive grid utilities
+- Design tokens already in place — extend for new components
+
+---
+
+#### Authentication
+
+#### [NEW] `apps/web/lib/api-client.ts`
+- Axios instance with base URL `http://localhost:4000`
+- Automatic Bearer token injection from localStorage
+- 401 interceptor → calls `/api/auth/refresh` → retries original request
+- Token storage utility functions
+
+#### [NEW] `apps/web/lib/auth-store.ts`
+- Zustand store for auth state: `{ user, accessToken, isLoading, login, logout, refreshAuth }`
+- Persists to `sessionStorage` (not `localStorage`) for security
+
+#### [NEW] `apps/web/app/(auth)/login/page.tsx`
+- Email/password form + Google Sign-In button
+- Responsive, mobile-first layout matching the existing editorial design
+- Redirects to `/notes` on success (or to `callbackUrl` param)
+
+#### [NEW] `apps/web/app/(auth)/register/page.tsx`
+- Name, email, password, confirm password
+- Same design language as login
+
+#### [NEW] `apps/web/components/auth/GoogleSignInButton.tsx`
+- Loads Google Identity Services script
+- One-tap button → sends ID token to `POST /api/auth/google`
+
+---
+
+#### Homepage (`/`)
+
+#### [MODIFY] `apps/web/app/page.tsx`
+Restructure into three clearly separated sections:
+
+**Section 1 — Hero with Announcement Slider**
+- Auto-playing carousel (Embla Carousel — lightweight, mobile-friendly)
+- Each slide is either:
+  - An **announcement card**: title, description text, optional CTA button
+  - A **YouTube embed**: embedded `<iframe>` with the video
+- Dot indicators, swipe support on mobile
+- "Login to access notes" CTA for unauthenticated visitors
+
+**Section 2 — Notes Section (Most Important)**
+- Subject filter chips (horizontal scroll on mobile)
+- Notes grid — each card shows: title, subject badge, page count, FREE/PRO badge
+- **For unauthenticated visitors:** cards show a lock icon; clicking prompts login
+- **For logged-in users:** clicking opens the Secure Notes Viewer modal
+- Skeleton loading state for the notes grid
+
+**Section 3 — About Section**
+- Ajit sir's bio and platform intro (short, trust-building)
+- Platform stats (registered students, notes count, tests)
+- Social links (YouTube, WhatsApp, etc.)
+
+---
+
+#### Secure Notes Viewer
+
+> [!IMPORTANT]
+> This is the most critical component in the MVP. It renders PDFs on `<canvas>` so the raw file is never accessible in browser DevTools.
+
+#### [NEW] `apps/web/components/notes/SecureViewer.tsx`
+Architecture:
+1. User clicks a note → frontend calls `GET /api/notes/:id/view-token`
+2. Backend verifies auth + plan → returns a **signed R2 URL** (5-minute TTL, stored only in memory)
+3. Frontend fetches the PDF bytes via the signed URL using `fetch()` with the token
+4. **PDF.js** (`pdfjs-dist`) renders each page onto a `<canvas>` element
+5. A **dynamic watermark** (user's name + masked email + date) is drawn over every canvas page
+6. The `<canvas>` is wrapped in a container with:
+   - `pointer-events: none` on the canvas itself (no right-click on the rendered content)
+   - `user-select: none` on parent
+   - `onContextMenu: (e) => e.preventDefault()`
+   - Keyboard shortcut blocking: `Ctrl+S`, `Ctrl+P`, `Ctrl+C`, `Ctrl+A`
+   - `@media print { display: none }` — PDF does not print
+
+Security properties:
+- ✅ Raw PDF URL **never appears in browser network tab** (fetched as byte array, not loaded as `<embed>` or `<iframe src>`)
+- ✅ No download button
+- ✅ Right-click disabled on the PDF canvas
+- ✅ Ctrl+S / Ctrl+P blocked
+- ✅ Printing blocked via CSS
+- ✅ Dynamic watermark visible on every page (deterrent + traceability)
+- ⚠️ OS-level screenshots still possible — mitigated by watermark
+
+#### [NEW] `apps/web/components/notes/WatermarkCanvas.tsx`
+- Utility that overlays user info on each rendered PDF canvas page
+- Diagonal, semi-transparent text: `"[User Name] · [masked email] · [date]"`
+
+#### [NEW] `apps/web/components/notes/NoteCard.tsx`
+- The card displayed in the notes grid
+- Shows: title, subject, page count, FREE/PRO badge, last updated
+- Click handler → opens `SecureViewer` in a full-screen modal/sheet
+
+#### [NEW] `apps/web/components/notes/SubjectFilter.tsx`
+- Horizontally scrollable pill filter (mobile-friendly)
+- "All" selected by default
+- Filters notes grid client-side
+
+---
+
+#### Admin Panel
+
+> [!NOTE]
+> Admin panel lives at `/admin/*` — a completely separate layout from the student-facing site.
+
+#### [NEW] `apps/web/app/(admin)/layout.tsx`
+- Server component that checks user role
+- If not ADMIN → redirect to `/login`
+- Sidebar navigation (desktop) / bottom tab bar (mobile)
+- Links: Dashboard, Announcements, Subjects, Notes, Users
+
+#### [NEW] `apps/web/app/(admin)/admin/page.tsx` — Dashboard
+- Stats cards: Total users, Total notes, Active announcements
+- Recent user signups (last 10)
+- Quick action buttons: "Upload note", "Add announcement"
+
+#### [NEW] `apps/web/app/(admin)/admin/announcements/page.tsx`
+- List of all announcements with drag-to-reorder (order field)
+- Toggle active/inactive
+- Edit / Delete
+
+#### [NEW] `apps/web/app/(admin)/admin/announcements/new/page.tsx`
+- Form: Title, Description, Type (TEXT / VIDEO), YouTube URL (if VIDEO), Active toggle
+
+#### [NEW] `apps/web/app/(admin)/admin/subjects/page.tsx`
+- List all subjects, add new subject, delete empty subjects
+
+#### [NEW] `apps/web/app/(admin)/admin/notes/page.tsx`
+- Table of all notes with: title, subject, pages, FREE/PRO, date
+- Search + filter by subject
+- Edit / Delete actions
+
+#### [NEW] `apps/web/app/(admin)/admin/notes/upload/page.tsx`
+- Drag-and-drop PDF upload form
+- Fields: Title, Subject (dropdown), isPaid toggle, Description
+- Upload progress bar (streams to R2 via API)
+- Shows uploaded note preview on success
+
+#### [NEW] `apps/web/app/(admin)/admin/users/page.tsx`
+- Paginated user table: name, email, role, plan, joined date
+- Search by name/email
+- Inline: upgrade/downgrade plan, change role
+
+---
+
+#### Shared Components
+
+#### [NEW] `apps/web/components/ui/Slider.tsx`
+- Embla Carousel wrapper — announcement hero slider
+- Auto-play with pause-on-hover
+- Touch/swipe enabled (mobile-first)
+- Dot indicators
+
+#### [NEW] `apps/web/components/layout/Navbar.tsx`
+- Sticky top navbar extracted from `page.tsx`
+- Conditionally shows: "Login" button (unauthenticated) vs user avatar + dropdown (authenticated)
+- Hamburger menu on mobile
+
+#### [NEW] `apps/web/components/layout/MobileMenu.tsx`
+- Slide-in drawer for mobile navigation
+
+#### [NEW] `apps/web/hooks/useNotes.ts`
+- React Query hook: `GET /api/notes` with subject filter
+- Caches for 5 minutes
+
+#### [NEW] `apps/web/hooks/useAnnouncements.ts`
+- React Query hook: `GET /api/announcements`
+
+---
+
+### Database Migration
+
+#### [NEW] Migration: add `Announcement`, `NoteView`, update `Note`
+```bash
+cd apps/api
+npx prisma migrate dev --name add-announcements-note-views
+```
+
+---
+
+## Performance & Reliability (1,000 Users)
+
+| Concern | Solution |
+|---|---|
+| API overload | Express already has rate limiting middleware; notes list is cacheable |
+| PDF loading speed | PDF.js lazy renders pages — only renders visible page + 1 page ahead |
+| Database queries | Prisma queries are already optimised; indexes on `subjectId`, `userId` |
+| Static assets | Next.js serves CSS/JS with long-cache headers automatically |
+| Signed URL theft | 5-minute TTL + user-specific token; URL is in memory only, not in DOM |
+| Concurrent uploads | R2 handles upload concurrency; multer streams directly — no disk I/O |
+
+---
+
+## Build Order (Suggested Sprint)
+
+```
+Day 1-2:  DB migration (Announcement model) + Announcements API
+Day 3:    Auth frontend (login/register pages + Zustand store + API client)
+Day 4:    Homepage refactor — Navbar + Hero Slider + About section
+Day 5-6:  Secure Notes Viewer (PDF.js canvas renderer + watermark)
+Day 7:    Notes section on homepage (grid, subject filter, lock state for guests)
+Day 8:    Admin panel — layout, dashboard, users page
+Day 9:    Admin panel — announcements management
+Day 10:   Admin panel — notes upload + management
+Day 11:   Mobile responsiveness pass across all pages
+Day 12:   End-to-end QA + bug fixes
+```
+
+---
+
+## Verification Plan
+
+### Functional Tests
+- [ ] Register with email → login → can view notes → logout → redirected to login
+- [ ] Google Sign-In flow works end-to-end
+- [ ] Secure viewer: raw PDF URL does NOT appear in browser Network tab
+- [ ] Watermark shows user's name/email on every PDF page
+- [ ] Right-click on PDF canvas shows no context menu
+- [ ] Ctrl+S does nothing inside the viewer
+- [ ] Ctrl+P is blocked or prints a blank page
+- [ ] Admin can upload a PDF and it appears in the notes list
+- [ ] Admin can create announcement → it shows in homepage slider
+- [ ] Admin can change a user's plan from FREE → PAID
+
+### Mobile Tests
+- [ ] Homepage renders correctly on 375px (iPhone SE) viewport
+- [ ] Notes grid is 1-column on mobile, 2-column on tablet, 3-column on desktop
+- [ ] Secure viewer is readable and navigable on mobile
+- [ ] Admin panel is usable on mobile (bottom tab bar)
+- [ ] Hero slider swipe works on touch devices
