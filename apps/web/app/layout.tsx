@@ -35,7 +35,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${playfair.variable} ${dmSans.variable}`}>
-      <body className="min-h-full flex flex-col bg-white text-black">
+      <body className="min-h-full flex flex-col bg-[#0a0a0a] text-white">
         <QueryProvider>
           <Navbar />
           <div style={{ paddingTop: "64px" }}>{children}</div>

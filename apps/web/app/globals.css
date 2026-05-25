@@ -18,8 +18,8 @@
 
 body {
   font-family: var(--font-sans), 'DM Sans', sans-serif;
-  background: var(--white);
-  color: var(--black);
+  background: var(--black);
+  color: var(--white);
   -webkit-font-smoothing: antialiased;
 }
 
