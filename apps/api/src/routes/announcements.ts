@@ -2,11 +2,12 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { requireAdmin, requireSuperAdmin } from '../middleware/auth';
 import { AnnouncementType } from '@prisma/client';
+import { asyncHandler } from '../lib/asyncHandler';
 
 export const announcementsRouter = Router();
 
 // GET /api/announcements — public, returns active announcements ordered by `order` field
-announcementsRouter.get('/', async (_req: Request, res: Response) => {
+announcementsRouter.get('/', asyncHandler(async (_req: Request, res: Response) => {
   const announcements = await prisma.announcement.findMany({
     where: { isActive: true },
     orderBy: { order: 'asc' },
@@ -22,18 +23,18 @@ announcementsRouter.get('/', async (_req: Request, res: Response) => {
     },
   });
   res.json({ data: announcements });
-});
+}));
 
 // GET /api/announcements/all — admin, returns ALL announcements including inactive
-announcementsRouter.get('/all', requireAdmin(), async (_req: Request, res: Response) => {
+announcementsRouter.get('/all', requireAdmin(), asyncHandler(async (_req: Request, res: Response) => {
   const announcements = await prisma.announcement.findMany({
     orderBy: { order: 'asc' },
   });
   res.json({ data: announcements });
-});
+}));
 
 // POST /api/announcements — admin creates announcement
-announcementsRouter.post('/', requireAdmin(), async (req: Request, res: Response) => {
+announcementsRouter.post('/', requireAdmin(), asyncHandler(async (req: Request, res: Response) => {
   const { title, description, type, youtubeUrl, isActive, order } = req.body;
 
   if (!title) {
@@ -58,10 +59,10 @@ announcementsRouter.post('/', requireAdmin(), async (req: Request, res: Response
   });
 
   res.status(201).json({ data: announcement });
-});
+}));
 
 // PATCH /api/announcements/:id — admin updates / reorders / toggles active
-announcementsRouter.patch('/:id', requireAdmin(), async (req: Request, res: Response) => {
+announcementsRouter.patch('/:id', requireAdmin(), asyncHandler(async (req: Request, res: Response) => {
   const id = String(req.params.id);
   const existing = await prisma.announcement.findUnique({ where: { id } });
   if (!existing) {
@@ -99,10 +100,10 @@ announcementsRouter.patch('/:id', requireAdmin(), async (req: Request, res: Resp
   });
 
   res.json({ data: updated });
-});
+}));
 
 // DELETE /api/announcements/:id — super admin only
-announcementsRouter.delete('/:id', requireSuperAdmin(), async (req: Request, res: Response) => {
+announcementsRouter.delete('/:id', requireSuperAdmin(), asyncHandler(async (req: Request, res: Response) => {
   const id = String(req.params.id);
   const existing = await prisma.announcement.findUnique({ where: { id } });
   if (!existing) {
@@ -112,4 +113,4 @@ announcementsRouter.delete('/:id', requireSuperAdmin(), async (req: Request, res
 
   await prisma.announcement.delete({ where: { id } });
   res.json({ data: { message: 'Announcement deleted' } });
-});
+}));

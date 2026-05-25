@@ -6,9 +6,9 @@ import apiClient from '@/lib/api-client';
 import WatermarkCanvas from './WatermarkCanvas';
 import type { NoteWithSubject } from '@/hooks/useNotes';
 
-// Initialize PDF.js worker from CDN (avoids local Webpack build issues)
+// Initialize PDF.js worker — use local copy in /public (v5.x uses .mjs, not available on cdnjs)
 if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 }
 
 interface SecureViewerProps {
@@ -52,32 +52,40 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
     async function loadPdf() {
       try {
         setLoading(true);
-        
-        // 1. Get signed URL (5-min expiry)
-        const { data: tokenData } = await apiClient.get<{ data: { url: string } }>(
-          `/api/notes/${note.id}/view-token`
-        );
-        
-        // 2. Fetch raw bytes (doesn't expose URL to DOM)
-        const response = await fetch(tokenData.data.url);
-        if (!response.ok) throw new Error('Failed to download document');
+
+        // Fetch PDF bytes directly from our API proxy
+        // The API streams bytes from S3 server-side — no CORS issues, no signed URL in browser
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const token = typeof window !== 'undefined' ? sessionStorage.getItem('accessToken') : null;
+
+        const response = await fetch(`${apiUrl}/api/notes/${note.id}/stream`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+
+        if (!response.ok) {
+          const msg = response.status === 401 ? 'Please log in to view this document.' :
+                      response.status === 403 ? 'You do not have access to this document.' :
+                      'Failed to load document.';
+          throw new Error(msg);
+        }
+
         const arrayBuffer = await response.arrayBuffer();
-        
+
         if (!isMounted) return;
 
-        // 3. Load into PDF.js
+        // Load into PDF.js
         const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
         const doc = await loadingTask.promise;
-        
+
         if (!isMounted) return;
-        
+
         setPdfDoc(doc);
         setNumPages(doc.numPages);
         setLoading(false);
       } catch (err) {
         console.error('PDF load error:', err);
         if (isMounted) {
-          setError('Failed to load document securely. Please try again.');
+          setError(err instanceof Error ? err.message : 'Failed to load document. Please try again.');
           setLoading(false);
         }
       }

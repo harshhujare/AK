@@ -18,11 +18,12 @@ const s3 = new S3Client({
 const BUCKET = process.env.AWS_BUCKET_NAME!;
 
 /**
- * Stream a file directly to AWS S3.
+ * Upload a file (Buffer or Readable stream) to AWS S3.
+ * For Buffer inputs, ContentLength is set automatically — required by AWS SDK v3.
  * Never saves to disk.
  */
 export async function uploadFile(
-  stream: Readable | Buffer,
+  body: Buffer | Readable,
   key: string,
   contentType = 'application/pdf'
 ): Promise<void> {
@@ -30,8 +31,10 @@ export async function uploadFile(
     new PutObjectCommand({
       Bucket: BUCKET,
       Key: key,
-      Body: stream,
+      Body: body,
       ContentType: contentType,
+      // ContentLength is required for streams; auto-derived from Buffer
+      ...(Buffer.isBuffer(body) && { ContentLength: body.length }),
     })
   );
 }
@@ -54,4 +57,13 @@ export async function getSignedViewUrl(
  */
 export async function deleteFile(key: string): Promise<void> {
   await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
+}
+
+/**
+ * Stream a private S3 object directly to the caller (for API proxy).
+ * Returns the GetObjectCommandOutput so the caller can pipe Body and read ContentLength.
+ */
+export async function getFileStream(key: string) {
+  const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
+  return s3.send(command);
 }

@@ -1,0 +1,253 @@
+'use client';
+
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import apiClient from '@/lib/api-client';
+
+interface Subject {
+  id: string;
+  name: string;
+  nameMarathi: string | null;
+  order: number;
+  createdAt: string;
+}
+
+export default function SubjectsPage() {
+  const qc = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [newSubject, setNewSubject] = useState({ name: '', nameMarathi: '' });
+  const [formError, setFormError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const { data: subjects, isLoading } = useQuery({
+    queryKey: ['subjects'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<{ data: Subject[] }>('/api/subjects');
+      return data.data;
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () => apiClient.post('/api/subjects', {
+      name: newSubject.name,
+      nameMarathi: newSubject.nameMarathi || undefined,
+      order: subjects ? subjects.length : 0, // auto-assign order
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['subjects'] });
+      setNewSubject({ name: '', nameMarathi: '' });
+      setShowForm(false);
+      setFormError(null);
+    },
+    onError: (err: any) => setFormError(err?.response?.data?.error || 'Failed to create subject'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiClient.delete(`/api/subjects/${id}`),
+    onSuccess: () => {
+      setDeletingId(null);
+      qc.invalidateQueries({ queryKey: ['subjects'] });
+    },
+    onError: (err: any) => alert(err?.response?.data?.error || 'Cannot delete — subject may have notes attached.'),
+  });
+
+  const handleCreate = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    if (!newSubject.name.trim()) { setFormError('Name is required'); return; }
+    createMutation.mutate();
+  };
+
+  return (
+    <div className="admin-page">
+      <header className="admin-page-header">
+        <div>
+          <h1 className="admin-page-title font-serif">Subjects</h1>
+          <p className="admin-page-desc">Manage subject categories for notes.</p>
+        </div>
+        <button className="btn-primary" onClick={() => setShowForm(!showForm)} id="add-subject-btn">
+          {showForm ? 'Cancel' : '+ Add Subject'}
+        </button>
+      </header>
+
+      {/* Inline add form */}
+      {showForm && (
+        <form className="inline-form" onSubmit={handleCreate}>
+          {formError && <div className="form-error">{formError}</div>}
+          <div className="form-help">
+            Fill in the subject details below. The Marathi name is optional but recommended.
+            New subjects appear at the end of the filter list.
+          </div>
+          <div className="inline-form-row">
+            <div className="input-group">
+              <label className="input-label" htmlFor="subject-name">English Name *</label>
+              <input
+                id="subject-name" type="text" className="form-input"
+                placeholder="e.g. Child Development"
+                value={newSubject.name}
+                onChange={e => setNewSubject(s => ({ ...s, name: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="input-group">
+              <label className="input-label" htmlFor="subject-name-mr">मराठी नाव (optional)</label>
+              <input
+                id="subject-name-mr" type="text" className="form-input"
+                placeholder="उदा. बालविकास"
+                value={newSubject.nameMarathi}
+                onChange={e => setNewSubject(s => ({ ...s, nameMarathi: e.target.value }))}
+              />
+            </div>
+            <button type="submit" className="btn-primary submit-btn" disabled={createMutation.isPending}>
+              {createMutation.isPending ? 'Adding…' : 'Add Subject'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {isLoading ? (
+        <div className="subject-list">
+          {[1, 2, 3].map(i => <div key={i} className="subject-skeleton" />)}
+        </div>
+      ) : !subjects || subjects.length === 0 ? (
+        <div className="empty-state">No subjects yet. Add one above.</div>
+      ) : (
+        <div className="subject-list">
+          {subjects.map(sub => (
+            <div key={sub.id} className="subject-row">
+              <div className="subject-info">
+                <span className="subject-order">#{sub.order}</span>
+                <div>
+                  <span className="subject-name">{sub.name}</span>
+                  {sub.nameMarathi && <span className="subject-name-mr">{sub.nameMarathi}</span>}
+                </div>
+              </div>
+              <button
+                className="delete-btn"
+                onClick={() => setDeletingId(sub.id)}
+              >
+                Delete
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Delete confirm */}
+      {deletingId && (
+        <div className="modal-overlay" onClick={() => setDeletingId(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3 className="modal-title">Delete Subject?</h3>
+            <p className="modal-desc">This will fail if any notes are attached to this subject. Remove those first.</p>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setDeletingId(null)}>Cancel</button>
+              <button className="btn-danger"
+                onClick={() => deleteMutation.mutate(deletingId!)}
+                disabled={deleteMutation.isPending}>
+                {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        .admin-page { max-width: 700px; }
+        .admin-page-header {
+          display: flex; align-items: flex-start; justify-content: space-between;
+          gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;
+        }
+        .admin-page-title { font-size: 2rem; font-weight: 700; color: white; margin-bottom: 0.25rem; }
+        .admin-page-desc { color: rgba(255,255,255,0.45); font-size: 0.9rem; }
+
+        .btn-primary {
+          padding: 0.6rem 1.25rem; background: white; color: black;
+          border: none; border-radius: 8px; font-size: 0.85rem; font-weight: 500;
+          cursor: pointer; transition: opacity 0.15s; white-space: nowrap;
+        }
+        .btn-primary:hover { opacity: 0.9; }
+
+        .btn-secondary {
+          padding: 0.6rem 1.25rem; background: rgba(255,255,255,0.06); color: white;
+          border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+          font-size: 0.85rem; font-weight: 500; cursor: pointer;
+        }
+        .btn-danger {
+          padding: 0.6rem 1.25rem; background: rgba(239,68,68,0.15); color: #fca5a5;
+          border: 1px solid rgba(239,68,68,0.3); border-radius: 8px;
+          font-size: 0.85rem; font-weight: 500; cursor: pointer;
+        }
+
+        .inline-form {
+          background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem;
+        }
+        .form-help {
+          font-size: 0.78rem; color: rgba(255,255,255,0.35);
+          margin-bottom: 1rem; line-height: 1.5;
+        }
+        .inline-form-row { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end; }
+        .input-group { display: flex; flex-direction: column; gap: 0.35rem; flex: 1; min-width: 150px; }
+        .input-label { font-size: 0.72rem; font-weight: 500; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.05em; }
+        .submit-btn { align-self: flex-end; white-space: nowrap; flex-shrink: 0; }
+        .form-error {
+          padding: 0.6rem 0.875rem; border-radius: 8px; margin-bottom: 0.75rem;
+          background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
+          color: #fca5a5; font-size: 0.8rem;
+        }
+        .form-input {
+          flex: 1; min-width: 140px; background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+          padding: 0.6rem 0.875rem; color: white; font-size: 0.875rem; outline: none;
+        }
+        .form-input:focus { border-color: rgba(255,255,255,0.25); }
+        .form-input::placeholder { color: rgba(255,255,255,0.2); }
+
+        .subject-list { display: flex; flex-direction: column; gap: 0.5rem; }
+        .subject-skeleton {
+          height: 60px; border-radius: 10px;
+          background: rgba(255,255,255,0.04); animation: pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity: 0.5; } }
+
+        .subject-row {
+          display: flex; align-items: center; justify-content: space-between;
+          gap: 1rem; padding: 0.875rem 1rem;
+          background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 10px; transition: border-color 0.15s;
+        }
+        .subject-row:hover { border-color: rgba(255,255,255,0.1); }
+        .subject-info { display: flex; align-items: center; gap: 0.75rem; }
+        .subject-order { font-size: 0.75rem; color: rgba(255,255,255,0.25); width: 1.5rem; }
+        .subject-name { font-size: 0.9rem; color: white; }
+        .subject-name-mr { font-size: 0.8rem; color: rgba(255,255,255,0.4); margin-left: 0.5rem; }
+
+        .delete-btn {
+          padding: 0.35rem 0.7rem; border-radius: 6px; font-size: 0.75rem;
+          border: 1px solid rgba(239,68,68,0.2); background: rgba(239,68,68,0.07);
+          color: rgba(248,113,113,0.7); cursor: pointer; transition: all 0.15s;
+        }
+        .delete-btn:hover { background: rgba(239,68,68,0.15); color: #fca5a5; }
+
+        .empty-state {
+          padding: 3rem; text-align: center;
+          background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 14px; color: rgba(255,255,255,0.3);
+        }
+
+        .modal-overlay {
+          position: fixed; inset: 0; z-index: 1000;
+          background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+          display: flex; align-items: center; justify-content: center; padding: 1rem;
+        }
+        .modal {
+          background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 16px; padding: 2rem; max-width: 400px; width: 100%;
+        }
+        .modal-title { font-size: 1.1rem; font-weight: 600; color: white; margin-bottom: 0.5rem; }
+        .modal-desc { color: rgba(255,255,255,0.5); font-size: 0.875rem; margin-bottom: 1.5rem; }
+        .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
+      `}</style>
+    </div>
+  );
+}

@@ -7,6 +7,7 @@ export type AnnouncementType = 'TEXT' | 'VIDEO';
 // ─── Core Models ─────────────────────────────────────────────────────────────
 export interface User {
   id: string;
+  userId: string; // same as id, alias used by JWT payload
   name: string;
   email: string;
   role: Role;

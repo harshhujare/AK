@@ -13,9 +13,24 @@ import { errorHandler } from './middleware/error';
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+// ─── Global error guards (keep server alive on Neon cold-start timeouts) ──────
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection] Caught — server will continue:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException] Caught — server will continue:', err.message);
+});
+
 // ─── Middleware ───────────────────────────────────────────────────────────────
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:3000',
+  'http://localhost:3001', // fallback when port 3000 is busy
+];
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) cb(null, true);
+    else cb(new Error(`CORS blocked: ${origin}`));
+  },
   credentials: true,
 }));
 app.use(express.json());

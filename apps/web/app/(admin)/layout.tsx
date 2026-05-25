@@ -1,0 +1,289 @@
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
+import useAuthStore from '@/lib/auth-store';
+
+const NAV_ITEMS = [
+  { href: '/admin', label: 'Dashboard', icon: '◈', exact: true },
+  { href: '/admin/announcements', label: 'Announcements', icon: '📢', exact: false },
+  { href: '/admin/subjects', label: 'Subjects', icon: '📚', exact: false },
+  { href: '/admin/notes', label: 'Notes', icon: '📄', exact: false },
+  { href: '/admin/users', label: 'Users', icon: '👥', exact: false },
+];
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const { user, isInitialized, initialize } = useAuthStore();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (!isInitialized) initialize();
+  }, [initialize, isInitialized]);
+
+  useEffect(() => {
+    if (!isInitialized) return;
+    if (!user) { router.replace('/login'); return; }
+    if (user.role !== 'SUPER_ADMIN' && user.role !== 'CONTENT_MANAGER') {
+      router.replace('/');
+    }
+  }, [user, isInitialized, router]);
+
+  if (!isInitialized || !user) {
+    return (
+      <div className="admin-loading">
+        <div className="admin-spinner" />
+      </div>
+    );
+  }
+
+  if (user.role !== 'SUPER_ADMIN' && user.role !== 'CONTENT_MANAGER') {
+    return null;
+  }
+
+  const isActive = (item: typeof NAV_ITEMS[0]) =>
+    item.exact ? pathname === item.href : pathname.startsWith(item.href);
+
+  return (
+    <div className="admin-shell">
+      {/* Sidebar */}
+      <aside className="admin-sidebar">
+        <div className="admin-sidebar-brand">
+          <span className="admin-brand-dot" />
+          <span className="font-serif admin-brand-text">Admin</span>
+        </div>
+
+        <nav className="admin-nav">
+          {NAV_ITEMS.map((item) => {
+            // Users page is SUPER_ADMIN only
+            if (item.href === '/admin/users' && user.role !== 'SUPER_ADMIN') return null;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`admin-nav-item ${isActive(item) ? 'admin-nav-item--active' : ''}`}
+              >
+                <span className="admin-nav-icon" aria-hidden="true">{item.icon}</span>
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="admin-sidebar-footer">
+          <Link href="/" className="admin-back-link">← Back to site</Link>
+          <div className="admin-user-chip">
+            <span className="admin-user-role">{user.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Content Manager'}</span>
+            <span className="admin-user-name">{user.name}</span>
+          </div>
+        </div>
+      </aside>
+
+      {/* Mobile bottom tab bar */}
+      <nav className="admin-bottombar">
+        {NAV_ITEMS.map((item) => {
+          if (item.href === '/admin/users' && user.role !== 'SUPER_ADMIN') return null;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`admin-tab ${isActive(item) ? 'admin-tab--active' : ''}`}
+            >
+              <span className="admin-tab-icon">{item.icon}</span>
+              <span className="admin-tab-label">{item.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Main content */}
+      <main className="admin-content">
+        {children}
+      </main>
+
+      <style>{`
+        .admin-loading {
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #0a0a0a;
+        }
+        .admin-spinner {
+          width: 32px; height: 32px;
+          border: 2px solid rgba(255,255,255,0.1);
+          border-top-color: white;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .admin-shell {
+          display: flex;
+          min-height: 100vh;
+          background: #0a0a0a;
+        }
+
+        /* ── Sidebar ── */
+        .admin-sidebar {
+          width: 240px;
+          flex-shrink: 0;
+          background: #111;
+          border-right: 1px solid rgba(255,255,255,0.06);
+          display: flex;
+          flex-direction: column;
+          position: fixed;
+          top: 0;
+          left: 0;
+          bottom: 0;
+          z-index: 50;
+          padding: 1.5rem 0;
+        }
+
+        .admin-sidebar-brand {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0 1.25rem 1.5rem;
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+          margin-bottom: 0.75rem;
+        }
+
+        .admin-brand-dot {
+          width: 8px; height: 8px;
+          background: white;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+
+        .admin-brand-text {
+          font-size: 1rem;
+          font-weight: 600;
+          color: white;
+        }
+
+        .admin-nav {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          padding: 0 0.75rem;
+        }
+
+        .admin-nav-item {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 0.6rem 0.75rem;
+          border-radius: 8px;
+          font-size: 0.875rem;
+          color: rgba(255,255,255,0.5);
+          text-decoration: none;
+          transition: background 0.15s, color 0.15s;
+        }
+
+        .admin-nav-item:hover {
+          background: rgba(255,255,255,0.05);
+          color: rgba(255,255,255,0.9);
+        }
+
+        .admin-nav-item--active {
+          background: rgba(255,255,255,0.08);
+          color: white;
+        }
+
+        .admin-nav-icon { font-size: 1rem; }
+
+        .admin-sidebar-footer {
+          padding: 1rem 1.25rem 0;
+          border-top: 1px solid rgba(255,255,255,0.06);
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+
+        .admin-back-link {
+          font-size: 0.75rem;
+          color: rgba(255,255,255,0.35);
+          text-decoration: none;
+          transition: color 0.15s;
+        }
+        .admin-back-link:hover { color: rgba(255,255,255,0.7); }
+
+        .admin-user-chip {
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.07);
+          border-radius: 8px;
+          padding: 0.5rem 0.75rem;
+        }
+
+        .admin-user-role {
+          display: block;
+          font-size: 0.65rem;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: rgba(255,255,255,0.35);
+          margin-bottom: 0.15rem;
+        }
+
+        .admin-user-name {
+          display: block;
+          font-size: 0.8rem;
+          color: white;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        /* ── Main ── */
+        .admin-content {
+          flex: 1;
+          margin-left: 240px;
+          padding: 2rem;
+          min-height: 100vh;
+        }
+
+        /* ── Mobile bottom bar ── */
+        .admin-bottombar {
+          display: none;
+          position: fixed;
+          bottom: 0; left: 0; right: 0;
+          height: 60px;
+          background: #111;
+          border-top: 1px solid rgba(255,255,255,0.07);
+          z-index: 100;
+          align-items: stretch;
+          justify-content: space-around;
+        }
+
+        .admin-tab {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 2px;
+          text-decoration: none;
+          color: rgba(255,255,255,0.4);
+          font-size: 0.6rem;
+          transition: color 0.15s;
+        }
+
+        .admin-tab--active { color: white; }
+        .admin-tab-icon { font-size: 1.1rem; }
+        .admin-tab-label { font-size: 0.55rem; }
+
+        @media (max-width: 768px) {
+          .admin-sidebar { display: none; }
+          .admin-bottombar { display: flex; }
+          .admin-content {
+            margin-left: 0;
+            padding: 1rem;
+            padding-bottom: 76px;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}

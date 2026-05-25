@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import { prisma } from '../lib/prisma';
+import { prisma, withRetry } from '../lib/prisma';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../services/token';
 import { verifyGoogleIdToken } from '../services/google';
 import { RegisterSchema, LoginSchema, GoogleAuthSchema } from '@ajitsir/shared';
@@ -90,7 +90,7 @@ authRouter.post('/google', async (req: Request, res: Response) => {
   }
 
   // Upsert user — create if first time, find if returning
-  const user = await prisma.user.upsert({
+  const user = await withRetry(() => prisma.user.upsert({
     where: { googleId: googleUser.googleId },
     update: { name: googleUser.name },
     create: {
@@ -98,7 +98,7 @@ authRouter.post('/google', async (req: Request, res: Response) => {
       email: googleUser.email,
       googleId: googleUser.googleId,
     },
-  });
+  }));
 
   const accessToken = signAccessToken({ userId: user.id, role: user.role, plan: user.plan });
   const refreshToken = signRefreshToken(user.id);
@@ -156,7 +156,7 @@ authRouter.get('/me', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'User not found' });
       return;
     }
-    res.json({ data: user });
+    res.json({ data: { ...user, userId: user.id } });
   } catch {
     res.status(401).json({ error: 'Invalid token' });
   }

@@ -74,6 +74,8 @@ export const UpdateUserPlanSchema = z.object({
 
 export const CreateSubjectSchema = z.object({
   name: z.string().min(2).max(100),
+  nameMarathi: z.string().max(100).optional(),
+  order: z.number().int().min(0).optional().default(0),
 });
 
 // ─── Inferred types ───────────────────────────────────────────────────────────
