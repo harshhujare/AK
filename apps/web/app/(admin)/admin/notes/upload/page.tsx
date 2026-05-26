@@ -5,11 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import apiClient from '@/lib/api-client';
-import * as pdfjsLib from 'pdfjs-dist';
-
-if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
-}
+// pdfjs-dist is imported dynamically inside the file handler to prevent server prerender errors (DOMMatrix is not defined)
 
 interface Subject { id: string; name: string; }
 
@@ -75,6 +71,10 @@ export default function NoteUploadPage() {
 
     // Generate Thumbnail
     try {
+      const pdfjsLib = await import('pdfjs-dist');
+      if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+      }
       const arrayBuffer = await f.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const page = await pdf.getPage(1);
@@ -84,7 +84,7 @@ export default function NoteUploadPage() {
       if (context) {
         canvas.height = viewport.height;
         canvas.width = viewport.width;
-        await page.render({ canvasContext: context, viewport }).promise;
+        await page.render({ canvas: canvas, canvasContext: context, viewport }).promise;
         canvas.toBlob((blob) => {
           if (blob) {
             setThumbnail(blob);
