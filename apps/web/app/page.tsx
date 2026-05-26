@@ -8,7 +8,11 @@ import { useNotes, type NoteWithSubject } from '@/hooks/useNotes';
 import Slider from '@/components/ui/Slider';
 import SubjectFilter from '@/components/notes/SubjectFilter';
 import NoteCard from '@/components/notes/NoteCard';
-import SecureViewer from '@/components/notes/SecureViewer';
+import dynamic from 'next/dynamic';
+
+const SecureViewer = dynamic(() => import('@/components/notes/SecureViewer'), {
+  ssr: false,
+});
 
 export default function Home() {
   const { user, isInitialized } = useAuthStore();
