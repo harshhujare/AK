@@ -470,12 +470,18 @@ export default function Navbar() {
         .bar-bot--open { transform: translateY(-6.5px) rotate(-45deg); }
 
         @media (max-width: 768px) {
-          .navbar-links,
-          .navbar-auth {
+          .navbar-links {
+            display: none;
+          }
+          .navbar-user,
+          .navbar-login-btn {
             display: none;
           }
           .navbar-hamburger {
             display: flex;
+          }
+          .navbar-auth {
+            margin-left: auto;
           }
           /* Show theme toggle on mobile inline with hamburger */
           .theme-toggle-btn {

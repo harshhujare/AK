@@ -169,12 +169,12 @@ export default function Home() {
           background: var(--bg-page);
         }
         .hero-container {
-          max-width: 1200px;
+          max-width: 1350px;
           margin: 0 auto;
         }
         .slider-skeleton {
           width: 100%;
-          aspect-ratio: 21/9;
+          aspect-ratio: 16/7;
           background: var(--skeleton-bg);
           border-radius: 20px;
           animation: pulse 1.5s infinite ease-in-out;
