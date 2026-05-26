@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import apiClient from '@/lib/api-client';
 import useAuthStore from '@/lib/auth-store';
@@ -25,6 +25,7 @@ interface GoogleSignInButtonProps {
 }
 
 export default function GoogleSignInButton({ onError }: GoogleSignInButtonProps) {
+  const [isLoading, setIsLoading] = useState(false);
   const buttonRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -32,6 +33,7 @@ export default function GoogleSignInButton({ onError }: GoogleSignInButtonProps)
 
   const handleCredentialResponse = useCallback(
     async (response: { credential: string }) => {
+      setIsLoading(true);
       try {
         const { data } = await apiClient.post('/api/auth/google', {
           idToken: response.credential,
@@ -43,6 +45,7 @@ export default function GoogleSignInButton({ onError }: GoogleSignInButtonProps)
         const callbackUrl = searchParams.get('callbackUrl') || '/';
         router.push(callbackUrl);
       } catch (err) {
+        setIsLoading(false);
         console.error('Google auth error:', err);
         onError?.('Sign in failed. Please try again.');
       }
@@ -98,10 +101,33 @@ export default function GoogleSignInButton({ onError }: GoogleSignInButtonProps)
   }, [handleCredentialResponse]);
 
   return (
-    <div
-      ref={buttonRef}
-      id="google-signin-button"
-      style={{ width: '100%', minHeight: '44px' }}
-    />
+    <div style={{ position: 'relative', width: '100%', minHeight: '44px' }}>
+      <div
+        ref={buttonRef}
+        id="google-signin-button"
+        style={{
+          width: '100%',
+          minHeight: '44px',
+          opacity: isLoading ? 0.5 : 1,
+          pointerEvents: isLoading ? 'none' : 'auto',
+          transition: 'opacity 0.2s'
+        }}
+      />
+      {isLoading && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          display: 'flex', alignItems: 'center', justify: 'center',
+          background: 'rgba(255, 255, 255, 0.1)',
+          backdropFilter: 'blur(1px)',
+          borderRadius: '4px',
+          color: 'var(--text-primary, white)',
+          fontSize: '0.85rem',
+          fontWeight: 500,
+          zIndex: 10
+        }}>
+          Signing in...
+        </div>
+      )}
+    </div>
   );
 }
