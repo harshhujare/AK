@@ -4,6 +4,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 export const apiClient = axios.create({
   baseURL: API_URL,
+  timeout: 15000, // 15 seconds timeout to prevent hanging requests
   withCredentials: true, // sends cookies (refreshToken) automatically
   headers: {
     'Content-Type': 'application/json',
@@ -43,8 +44,12 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const url = originalRequest.url || '';
+    
+    // Do not attempt to refresh if the request is the refresh itself or an auth callback
+    const isAuthEndpoint = url.includes('/api/auth/refresh') || url.includes('/api/auth/google/callback');
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       if (isRefreshing) {
         // Queue this request until token refresh completes
         return new Promise((resolve, reject) => {
