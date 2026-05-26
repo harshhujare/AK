@@ -3,6 +3,7 @@ import { Playfair_Display, DM_Sans } from "next/font/google";
 import "./globals.css";
 import QueryProvider from "@/lib/query-provider";
 import Navbar from "@/components/layout/Navbar";
+import { ThemeProvider } from "@/lib/theme";
 
 const playfair = Playfair_Display({
   variable: "--font-serif",
@@ -34,12 +35,28 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${playfair.variable} ${dmSans.variable}`}>
-      <body className="min-h-full flex flex-col bg-[#0a0a0a] text-white">
-        <QueryProvider>
-          <Navbar />
-          <div style={{ paddingTop: "64px" }}>{children}</div>
-        </QueryProvider>
+    <html lang="en" className={`${playfair.variable} ${dmSans.variable}`} data-theme="light">
+      <head>
+        {/* Prevent flash of wrong theme: read localStorage before first paint */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                var t = localStorage.getItem('theme');
+                if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', t);
+              } catch(e) {}
+            `,
+          }}
+        />
+      </head>
+      <body className="min-h-full flex flex-col">
+        <ThemeProvider>
+          <QueryProvider>
+            <Navbar />
+            <div style={{ paddingTop: "64px" }}>{children}</div>
+          </QueryProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -157,95 +157,95 @@ export default function SubjectsPage() {
           display: flex; align-items: flex-start; justify-content: space-between;
           gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;
         }
-        .admin-page-title { font-size: 2rem; font-weight: 700; color: white; margin-bottom: 0.25rem; }
-        .admin-page-desc { color: rgba(255,255,255,0.45); font-size: 0.9rem; }
+        .admin-page-title { font-size: 2rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.25rem; }
+        .admin-page-desc { color: var(--text-secondary); font-size: 0.9rem; }
 
         .btn-primary {
-          padding: 0.6rem 1.25rem; background: white; color: black;
+          padding: 0.6rem 1.25rem; background: var(--accent-bg); color: var(--accent-text);
           border: none; border-radius: 8px; font-size: 0.85rem; font-weight: 500;
           cursor: pointer; transition: opacity 0.15s; white-space: nowrap;
         }
         .btn-primary:hover { opacity: 0.9; }
 
         .btn-secondary {
-          padding: 0.6rem 1.25rem; background: rgba(255,255,255,0.06); color: white;
-          border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+          padding: 0.6rem 1.25rem; background: var(--bg-surface-2); color: var(--text-primary);
+          border: 1px solid var(--border); border-radius: 8px;
           font-size: 0.85rem; font-weight: 500; cursor: pointer;
         }
         .btn-danger {
-          padding: 0.6rem 1.25rem; background: rgba(239,68,68,0.15); color: #fca5a5;
-          border: 1px solid rgba(239,68,68,0.3); border-radius: 8px;
+          padding: 0.6rem 1.25rem; background: var(--danger-bg); color: var(--danger-text);
+          border: 1px solid var(--danger-border); border-radius: 8px;
           font-size: 0.85rem; font-weight: 500; cursor: pointer;
         }
 
         .inline-form {
-          background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+          background: var(--bg-surface-2); border: 1px solid var(--border);
           border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem;
         }
         .form-help {
-          font-size: 0.78rem; color: rgba(255,255,255,0.35);
+          font-size: 0.78rem; color: var(--text-muted);
           margin-bottom: 1rem; line-height: 1.5;
         }
         .inline-form-row { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end; }
         .input-group { display: flex; flex-direction: column; gap: 0.35rem; flex: 1; min-width: 150px; }
-        .input-label { font-size: 0.72rem; font-weight: 500; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.05em; }
+        .input-label { font-size: 0.72rem; font-weight: 500; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
         .submit-btn { align-self: flex-end; white-space: nowrap; flex-shrink: 0; }
         .form-error {
           padding: 0.6rem 0.875rem; border-radius: 8px; margin-bottom: 0.75rem;
-          background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
-          color: #fca5a5; font-size: 0.8rem;
+          background: var(--danger-bg); border: 1px solid var(--danger-border);
+          color: var(--danger-text); font-size: 0.8rem;
         }
         .form-input {
-          flex: 1; min-width: 140px; background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
-          padding: 0.6rem 0.875rem; color: white; font-size: 0.875rem; outline: none;
+          flex: 1; min-width: 140px; background: var(--input-bg);
+          border: 1px solid var(--border); border-radius: 8px;
+          padding: 0.6rem 0.875rem; color: var(--text-primary); font-size: 0.875rem; outline: none;
         }
-        .form-input:focus { border-color: rgba(255,255,255,0.25); }
-        .form-input::placeholder { color: rgba(255,255,255,0.2); }
+        .form-input:focus { border-color: var(--border-strong); }
+        .form-input::placeholder { color: var(--text-placeholder); }
 
         .subject-list { display: flex; flex-direction: column; gap: 0.5rem; }
         .subject-skeleton {
           height: 60px; border-radius: 10px;
-          background: rgba(255,255,255,0.04); animation: pulse 1.5s ease-in-out infinite;
+          background: var(--skeleton-bg); animation: pulse 1.5s ease-in-out infinite;
         }
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity: 0.5; } }
 
         .subject-row {
           display: flex; align-items: center; justify-content: space-between;
           gap: 1rem; padding: 0.875rem 1rem;
-          background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+          background: var(--bg-surface-2); border: 1px solid var(--border);
           border-radius: 10px; transition: border-color 0.15s;
         }
-        .subject-row:hover { border-color: rgba(255,255,255,0.1); }
+        .subject-row:hover { border-color: var(--border-strong); }
         .subject-info { display: flex; align-items: center; gap: 0.75rem; }
-        .subject-order { font-size: 0.75rem; color: rgba(255,255,255,0.25); width: 1.5rem; }
-        .subject-name { font-size: 0.9rem; color: white; }
-        .subject-name-mr { font-size: 0.8rem; color: rgba(255,255,255,0.4); margin-left: 0.5rem; }
+        .subject-order { font-size: 0.75rem; color: var(--text-muted); width: 1.5rem; }
+        .subject-name { font-size: 0.9rem; color: var(--text-primary); }
+        .subject-name-mr { font-size: 0.8rem; color: var(--text-secondary); margin-left: 0.5rem; }
 
         .delete-btn {
           padding: 0.35rem 0.7rem; border-radius: 6px; font-size: 0.75rem;
-          border: 1px solid rgba(239,68,68,0.2); background: rgba(239,68,68,0.07);
-          color: rgba(248,113,113,0.7); cursor: pointer; transition: all 0.15s;
+          border: 1px solid var(--danger-border); background: var(--danger-bg);
+          color: var(--danger-text); cursor: pointer; transition: all 0.15s;
         }
-        .delete-btn:hover { background: rgba(239,68,68,0.15); color: #fca5a5; }
+        .delete-btn:hover { opacity: 0.8; }
 
         .empty-state {
           padding: 3rem; text-align: center;
-          background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
-          border-radius: 14px; color: rgba(255,255,255,0.3);
+          background: var(--bg-surface-2); border: 1px solid var(--border);
+          border-radius: 14px; color: var(--text-muted);
         }
 
         .modal-overlay {
           position: fixed; inset: 0; z-index: 1000;
-          background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+          background: var(--overlay-bg); backdrop-filter: blur(4px);
           display: flex; align-items: center; justify-content: center; padding: 1rem;
         }
         .modal {
-          background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1);
+          background: var(--bg-surface); border: 1px solid var(--border);
           border-radius: 16px; padding: 2rem; max-width: 400px; width: 100%;
         }
-        .modal-title { font-size: 1.1rem; font-weight: 600; color: white; margin-bottom: 0.5rem; }
-        .modal-desc { color: rgba(255,255,255,0.5); font-size: 0.875rem; margin-bottom: 1.5rem; }
+        .modal-title { font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem; }
+        .modal-desc { color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1.5rem; }
         .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
       `}</style>
     </div>

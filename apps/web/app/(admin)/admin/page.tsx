@@ -60,7 +60,7 @@ export default function AdminDashboard() {
             <StatCard label="Note Views Today" value={stats.todayViews} icon="👁" />
           </>
         ) : (
-          <p style={{ color: 'rgba(255,255,255,0.4)' }}>Failed to load stats.</p>
+          <p style={{ color: 'var(--text-muted)' }}>Failed to load stats.</p>
         )}
       </section>
 
@@ -84,8 +84,8 @@ export default function AdminDashboard() {
         .dashboard { max-width: 1000px; }
 
         .admin-page-header { margin-bottom: 2rem; }
-        .admin-page-title { font-size: 2rem; font-weight: 700; color: white; margin-bottom: 0.25rem; }
-        .admin-page-desc { color: rgba(255,255,255,0.45); font-size: 0.9rem; }
+        .admin-page-title { font-size: 2rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.25rem; }
+        .admin-page-desc { color: var(--text-secondary); font-size: 0.9rem; }
 
         .stats-grid {
           display: grid;
@@ -95,8 +95,8 @@ export default function AdminDashboard() {
         }
 
         .stat-card {
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.07);
+          background: var(--bg-surface-2);
+          border: 1px solid var(--border);
           border-radius: 14px;
           padding: 1.5rem;
           display: flex;
@@ -109,24 +109,24 @@ export default function AdminDashboard() {
         .stat-value {
           font-size: 2rem;
           font-weight: 700;
-          color: white;
+          color: var(--text-primary);
           line-height: 1;
           margin-bottom: 0.25rem;
         }
 
         .stat-label {
           font-size: 0.75rem;
-          color: rgba(255,255,255,0.45);
+          color: var(--text-secondary);
           text-transform: uppercase;
           letter-spacing: 0.05em;
         }
 
-        .stat-sub { font-size: 0.75rem; color: rgba(255,255,255,0.3); margin-top: 0.25rem; }
+        .stat-sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; }
 
         .stat-skeleton {
           height: 90px;
           border-radius: 14px;
-          background: rgba(255,255,255,0.04);
+          background: var(--skeleton-bg);
           animation: pulse 1.5s ease-in-out infinite;
         }
 
@@ -136,7 +136,7 @@ export default function AdminDashboard() {
           font-size: 0.75rem;
           text-transform: uppercase;
           letter-spacing: 0.1em;
-          color: rgba(255,255,255,0.35);
+          color: var(--text-muted);
           margin-bottom: 1rem;
         }
 
@@ -151,21 +151,21 @@ export default function AdminDashboard() {
           align-items: center;
           gap: 1rem;
           padding: 1.25rem;
-          background: rgba(255,255,255,0.02);
-          border: 1px solid rgba(255,255,255,0.07);
+          background: var(--bg-surface-2);
+          border: 1px solid var(--border);
           border-radius: 12px;
           text-decoration: none;
           transition: background 0.15s, border-color 0.15s;
         }
 
         .quick-action-card:hover {
-          background: rgba(255,255,255,0.05);
-          border-color: rgba(255,255,255,0.12);
+          background: var(--bg-hover);
+          border-color: var(--border-strong);
         }
 
         .quick-action-icon { font-size: 1.5rem; flex-shrink: 0; }
-        .quick-action-label { font-size: 0.9rem; font-weight: 500; color: white; margin-bottom: 0.2rem; }
-        .quick-action-desc { font-size: 0.75rem; color: rgba(255,255,255,0.4); }
+        .quick-action-label { font-size: 0.9rem; font-weight: 500; color: var(--text-primary); margin-bottom: 0.2rem; }
+        .quick-action-desc { font-size: 0.75rem; color: var(--text-secondary); }
       `}</style>
     </div>
   );

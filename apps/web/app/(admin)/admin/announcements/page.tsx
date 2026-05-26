@@ -135,11 +135,11 @@ export default function AnnouncementsPage() {
           display: flex; align-items: flex-start; justify-content: space-between;
           gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap;
         }
-        .admin-page-title { font-size: 2rem; font-weight: 700; color: white; margin-bottom: 0.25rem; }
-        .admin-page-desc { color: rgba(255,255,255,0.45); font-size: 0.9rem; }
+        .admin-page-title { font-size: 2rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.25rem; }
+        .admin-page-desc { color: var(--text-secondary); font-size: 0.9rem; }
 
         .btn-primary {
-          padding: 0.6rem 1.25rem; background: white; color: black;
+          padding: 0.6rem 1.25rem; background: var(--accent-bg); color: var(--accent-text);
           border: none; border-radius: 8px; font-size: 0.85rem;
           font-weight: 500; cursor: pointer; text-decoration: none;
           white-space: nowrap; transition: opacity 0.15s; display: inline-block;
@@ -147,47 +147,47 @@ export default function AnnouncementsPage() {
         .btn-primary:hover { opacity: 0.9; }
 
         .btn-secondary {
-          padding: 0.6rem 1.25rem; background: rgba(255,255,255,0.06); color: white;
-          border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+          padding: 0.6rem 1.25rem; background: var(--bg-surface-2); color: var(--text-primary);
+          border: 1px solid var(--border); border-radius: 8px;
           font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: background 0.15s;
         }
-        .btn-secondary:hover { background: rgba(255,255,255,0.09); }
+        .btn-secondary:hover { background: var(--bg-hover); }
 
         .btn-danger {
-          padding: 0.6rem 1.25rem; background: rgba(239,68,68,0.15); color: #fca5a5;
-          border: 1px solid rgba(239,68,68,0.3); border-radius: 8px;
+          padding: 0.6rem 1.25rem; background: var(--danger-bg); color: var(--danger-text);
+          border: 1px solid var(--danger-border); border-radius: 8px;
           font-size: 0.85rem; font-weight: 500; cursor: pointer;
         }
-        .btn-danger:hover { background: rgba(239,68,68,0.25); }
+        .btn-danger:hover { opacity: 0.8; }
 
         .table-skeleton, .row-skeleton {
           display: flex; flex-direction: column; gap: 0.75rem;
         }
         .row-skeleton {
           height: 80px; border-radius: 12px;
-          background: rgba(255,255,255,0.04);
+          background: var(--skeleton-bg);
           animation: pulse 1.5s ease-in-out infinite;
         }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
         .empty-state {
           text-align: center; padding: 4rem;
-          background: rgba(255,255,255,0.02);
-          border: 1px solid rgba(255,255,255,0.06);
-          border-radius: 16px; color: rgba(255,255,255,0.4);
+          background: var(--bg-surface-2);
+          border: 1px solid var(--border);
+          border-radius: 16px; color: var(--text-muted);
         }
 
         .ann-list { display: flex; flex-direction: column; gap: 0.75rem; }
 
         .ann-row {
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.07);
+          background: var(--bg-surface-2);
+          border: 1px solid var(--border);
           border-radius: 12px; padding: 1.25rem;
           display: flex; align-items: flex-start;
           justify-content: space-between; gap: 1rem;
           transition: border-color 0.15s;
         }
-        .ann-row:hover { border-color: rgba(255,255,255,0.12); }
+        .ann-row:hover { border-color: var(--border-strong); }
         .ann-row--inactive { opacity: 0.5; }
 
         .ann-info { flex: 1; }
@@ -195,56 +195,56 @@ export default function AnnouncementsPage() {
 
         .type-badge {
           font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px;
-          background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.6);
+          background: var(--bg-surface); color: var(--text-secondary); border: 1px solid var(--border);
         }
-        .type-badge--video { background: rgba(239,68,68,0.15); color: #fca5a5; }
+        .type-badge--video { background: var(--danger-bg); color: var(--danger-text); border: 1px solid var(--danger-border); }
 
         .status-dot {
-          width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.15);
+          width: 6px; height: 6px; border-radius: 50%; background: var(--text-placeholder);
         }
-        .status-dot--active { background: #22c55e; }
+        .status-dot--active { background: var(--success-text); }
 
-        .ann-order { font-size: 0.7rem; color: rgba(255,255,255,0.3); }
-        .ann-title { font-size: 0.95rem; font-weight: 500; color: white; margin-bottom: 0.25rem; }
-        .ann-desc { font-size: 0.8rem; color: rgba(255,255,255,0.45); }
-        .ann-url a { font-size: 0.75rem; color: rgba(100,149,237,0.8); text-decoration: none; }
-        .ann-url a:hover { color: cornflowerblue; }
+        .ann-order { font-size: 0.7rem; color: var(--text-muted); }
+        .ann-title { font-size: 0.95rem; font-weight: 500; color: var(--text-primary); margin-bottom: 0.25rem; }
+        .ann-desc { font-size: 0.8rem; color: var(--text-secondary); }
+        .ann-url a { font-size: 0.75rem; color: var(--info-text); text-decoration: none; }
+        .ann-url a:hover { opacity: 0.8; }
 
         .ann-actions { display: flex; gap: 0.5rem; flex-shrink: 0; flex-wrap: wrap; }
 
         .toggle-btn {
           padding: 0.4rem 0.75rem; border-radius: 6px;
           font-size: 0.75rem; font-weight: 500; cursor: pointer;
-          border: 1px solid rgba(255,255,255,0.1);
-          background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.5);
+          border: 1px solid var(--border);
+          background: var(--bg-surface-2); color: var(--text-secondary);
           transition: all 0.15s;
         }
         .toggle-btn--active {
-          background: rgba(34,197,94,0.1); color: #86efac;
-          border-color: rgba(34,197,94,0.3);
+          background: var(--success-bg); color: var(--success-text);
+          border-color: var(--success-border);
         }
         .toggle-btn:hover { opacity: 0.8; }
 
         .delete-btn {
           padding: 0.4rem 0.75rem; border-radius: 6px;
           font-size: 0.75rem; font-weight: 500; cursor: pointer;
-          border: 1px solid rgba(239,68,68,0.2);
-          background: rgba(239,68,68,0.07); color: rgba(248,113,113,0.7);
+          border: 1px solid var(--danger-border);
+          background: var(--danger-bg); color: var(--danger-text);
           transition: all 0.15s;
         }
-        .delete-btn:hover { background: rgba(239,68,68,0.15); color: #fca5a5; }
+        .delete-btn:hover { opacity: 0.8; }
 
         .modal-overlay {
           position: fixed; inset: 0; z-index: 1000;
-          background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+          background: var(--overlay-bg); backdrop-filter: blur(4px);
           display: flex; align-items: center; justify-content: center; padding: 1rem;
         }
         .modal {
-          background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1);
+          background: var(--bg-surface); border: 1px solid var(--border);
           border-radius: 16px; padding: 2rem; max-width: 400px; width: 100%;
         }
-        .modal-title { font-size: 1.1rem; font-weight: 600; color: white; margin-bottom: 0.5rem; }
-        .modal-desc { color: rgba(255,255,255,0.5); font-size: 0.875rem; margin-bottom: 1.5rem; }
+        .modal-title { font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem; }
+        .modal-desc { color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1.5rem; }
         .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
       `}</style>
     </div>

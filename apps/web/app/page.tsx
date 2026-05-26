@@ -134,15 +134,15 @@ export default function Home() {
       {/* ─── Styles ───────────────────────────────────────────────────────────── */}
       <style>{`
         .homepage {
-          background: #0a0a0a;
-          color: white;
+          background: var(--bg-page);
+          color: var(--text-primary);
           min-height: 100vh;
         }
 
         /* Hero */
         .section-hero {
           padding: 2rem 1.5rem;
-          background: #0a0a0a;
+          background: var(--bg-page);
         }
         .hero-container {
           max-width: 1200px;
@@ -151,16 +151,16 @@ export default function Home() {
         .slider-skeleton {
           width: 100%;
           aspect-ratio: 21/9;
-          background: rgba(255,255,255,0.05);
+          background: var(--skeleton-bg);
           border-radius: 20px;
           animation: pulse 1.5s infinite ease-in-out;
         }
         .hero-fallback {
           text-align: center;
           padding: 6rem 2rem;
-          background: rgba(255,255,255,0.02);
+          background: var(--bg-surface-2);
           border-radius: 20px;
-          border: 1px solid rgba(255,255,255,0.05);
+          border: 1px solid var(--border);
         }
         .hero-title {
           font-size: clamp(2rem, 5vw, 4rem);
@@ -169,13 +169,13 @@ export default function Home() {
         }
         .hero-subtitle {
           font-size: 1.1rem;
-          color: rgba(255,255,255,0.6);
+          color: var(--text-secondary);
           margin-bottom: 2rem;
         }
         .btn-primary {
           display: inline-block;
-          background: white;
-          color: black;
+          background: var(--accent-bg);
+          color: var(--accent-text);
           padding: 0.75rem 1.5rem;
           border-radius: 8px;
           font-weight: 500;
@@ -189,8 +189,8 @@ export default function Home() {
         /* Notes */
         .section-notes {
           padding: 4rem 1.5rem;
-          background: #0f0f0f;
-          border-top: 1px solid rgba(255,255,255,0.05);
+          background: var(--bg-surface);
+          border-top: 1px solid var(--border);
         }
         .notes-container {
           max-width: 1200px;
@@ -205,7 +205,7 @@ export default function Home() {
           margin-bottom: 0.5rem;
         }
         .section-desc {
-          color: rgba(255,255,255,0.5);
+          color: var(--text-secondary);
           font-size: 1rem;
         }
         .notes-grid {
@@ -215,23 +215,23 @@ export default function Home() {
         }
         .note-skeleton {
           height: 180px;
-          background: rgba(255,255,255,0.03);
+          background: var(--skeleton-bg);
           border-radius: 16px;
           animation: pulse 1.5s infinite ease-in-out;
         }
         .empty-state {
           text-align: center;
           padding: 4rem;
-          background: rgba(255,255,255,0.02);
+          background: var(--bg-surface-2);
           border-radius: 16px;
-          color: rgba(255,255,255,0.5);
+          color: var(--text-secondary);
         }
 
         /* About */
         .section-about {
           padding: 6rem 1.5rem;
-          background: #0a0a0a;
-          border-top: 1px solid rgba(255,255,255,0.05);
+          background: var(--bg-page);
+          border-top: 1px solid var(--border);
         }
         .about-container {
           max-width: 800px;
@@ -245,7 +245,7 @@ export default function Home() {
         .about-desc {
           font-size: 1.1rem;
           line-height: 1.6;
-          color: rgba(255,255,255,0.7);
+          color: var(--text-secondary);
           margin-bottom: 3rem;
         }
         .stats-grid {
@@ -254,8 +254,8 @@ export default function Home() {
           gap: 2rem;
           margin-bottom: 3rem;
           padding: 2rem 0;
-          border-top: 1px solid rgba(255,255,255,0.1);
-          border-bottom: 1px solid rgba(255,255,255,0.1);
+          border-top: 1px solid var(--border);
+          border-bottom: 1px solid var(--border);
         }
         .stat-item {
           display: flex;
@@ -265,13 +265,13 @@ export default function Home() {
         .stat-num {
           font-size: 2.5rem;
           font-weight: 700;
-          color: white;
+          color: var(--text-primary);
         }
         .stat-label {
           font-size: 0.85rem;
           text-transform: uppercase;
           letter-spacing: 0.05em;
-          color: rgba(255,255,255,0.5);
+          color: var(--text-secondary);
         }
         .social-links {
           display: flex;
@@ -301,9 +301,9 @@ export default function Home() {
         .footer {
           padding: 2rem;
           text-align: center;
-          color: rgba(255,255,255,0.4);
+          color: var(--text-muted);
           font-size: 0.85rem;
-          border-top: 1px solid rgba(255,255,255,0.05);
+          border-top: 1px solid var(--border);
         }
 
         @keyframes pulse {

@@ -76,7 +76,7 @@ function LoginContent() {
           justify-content: center;
           padding: 1.5rem;
           position: relative;
-          background: #0a0a0a;
+          background: var(--bg-page);
           overflow: hidden;
         }
 
@@ -90,8 +90,8 @@ function LoginContent() {
           position: absolute;
           inset: 0;
           background-image:
-            linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+            linear-gradient(var(--border) 1px, transparent 1px),
+            linear-gradient(90deg, var(--border) 1px, transparent 1px);
           background-size: 48px 48px;
         }
 
@@ -102,15 +102,15 @@ function LoginContent() {
           transform: translateX(-50%);
           width: 600px;
           height: 600px;
-          background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%);
+          background: radial-gradient(circle, var(--border) 0%, transparent 70%);
           border-radius: 50%;
         }
 
         .login-card {
           position: relative;
           z-index: 1;
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.1);
+          background: var(--bg-surface-2);
+          border: 1px solid var(--border);
           border-radius: 20px;
           padding: 2.5rem 2rem;
           width: 100%;
@@ -127,13 +127,13 @@ function LoginContent() {
           align-items: center;
           gap: 0.5rem;
           text-decoration: none;
-          color: white;
+          color: var(--text-primary);
         }
 
         .login-logo-dot {
           width: 8px;
           height: 8px;
-          background: white;
+          background: var(--text-primary);
           border-radius: 50%;
           display: block;
         }
@@ -142,7 +142,7 @@ function LoginContent() {
           font-size: 1rem;
           font-weight: 500;
           letter-spacing: -0.01em;
-          color: white;
+          color: var(--text-primary);
         }
 
         .login-header {
@@ -152,7 +152,7 @@ function LoginContent() {
         .login-title {
           font-size: 2rem;
           font-weight: 700;
-          color: white;
+          color: var(--text-primary);
           margin-bottom: 0.5rem;
           line-height: 1.2;
           letter-spacing: -0.02em;
@@ -160,7 +160,7 @@ function LoginContent() {
 
         .login-subtitle {
           font-size: 0.9rem;
-          color: rgba(255,255,255,0.5);
+          color: var(--text-secondary);
           line-height: 1.5;
         }
 
@@ -169,10 +169,10 @@ function LoginContent() {
           align-items: center;
           gap: 0.5rem;
           padding: 0.75rem 1rem;
-          background: rgba(239, 68, 68, 0.1);
-          border: 1px solid rgba(239, 68, 68, 0.3);
+          background: var(--danger-bg);
+          border: 1px solid var(--danger-border);
           border-radius: 10px;
-          color: #fca5a5;
+          color: var(--danger-text);
           font-size: 0.85rem;
           margin-bottom: 1.25rem;
         }
@@ -183,7 +183,7 @@ function LoginContent() {
 
         .login-google-skeleton {
           height: 44px;
-          background: rgba(255,255,255,0.06);
+          background: var(--skeleton-bg);
           border-radius: 8px;
           animation: pulse 1.5s ease-in-out infinite;
         }
@@ -198,7 +198,7 @@ function LoginContent() {
           align-items: center;
           gap: 0.75rem;
           margin-bottom: 1.5rem;
-          color: rgba(255,255,255,0.25);
+          color: var(--text-muted);
           font-size: 0.75rem;
         }
 
@@ -207,26 +207,26 @@ function LoginContent() {
           content: '';
           flex: 1;
           height: 1px;
-          background: rgba(255,255,255,0.1);
+          background: var(--border);
         }
 
         .login-note {
           font-size: 0.75rem;
-          color: rgba(255,255,255,0.3);
+          color: var(--text-muted);
           text-align: center;
           line-height: 1.5;
           margin-bottom: 1.5rem;
         }
 
         .login-link {
-          color: rgba(255,255,255,0.5);
+          color: var(--text-secondary);
           text-decoration: underline;
           text-underline-offset: 2px;
           transition: color 0.15s;
         }
 
         .login-link:hover {
-          color: white;
+          color: var(--text-primary);
         }
 
         .login-back {
@@ -235,13 +235,13 @@ function LoginContent() {
 
         .login-back-link {
           font-size: 0.8rem;
-          color: rgba(255,255,255,0.4);
+          color: var(--text-muted);
           text-decoration: none;
           transition: color 0.15s;
         }
 
         .login-back-link:hover {
-          color: rgba(255,255,255,0.8);
+          color: var(--text-primary);
         }
 
         @media (max-width: 480px) {

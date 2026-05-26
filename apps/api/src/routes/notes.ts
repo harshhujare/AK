@@ -74,9 +74,13 @@ notesRouter.get('/:id/stream', requireAuth(), asyncHandler(async (req: Request, 
 notesRouter.post(
   '/',
   requireAdmin(),
-  upload.single('file'),
+  upload.fields([{ name: 'file', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]),
   asyncHandler(async (req: Request, res: Response) => {
-    if (!req.file) {
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+    const file = files?.['file']?.[0];
+    const thumbnail = files?.['thumbnail']?.[0];
+
+    if (!file) {
       res.status(400).json({ error: 'PDF file is required' });
       return;
     }
@@ -87,11 +91,18 @@ notesRouter.post(
       return;
     }
 
-    const fileKey = `notes/${randomUUID()}.pdf`;
+    const noteId = randomUUID();
+    const fileKey = `notes/${noteId}.pdf`;
+    let thumbnailKey: string | undefined;
 
     // Pass the Buffer directly — AWS SDK v3 sets Content-Length automatically for Buffers.
     // Do NOT convert to Readable.from() without Content-Length; the SDK will throw.
-    await uploadFile(req.file.buffer, fileKey, 'application/pdf');
+    await uploadFile(file.buffer, fileKey, 'application/pdf');
+
+    if (thumbnail) {
+      thumbnailKey = `notes/thumbnails/${noteId}.jpg`;
+      await uploadFile(thumbnail.buffer, thumbnailKey, 'image/jpeg');
+    }
 
     // Save metadata to DB — wrapped in withRetry to handle Neon cold-start
     const note = await withRetry(() => prisma.note.create({
@@ -101,6 +112,7 @@ notesRouter.post(
         subjectId: parsed.data.subjectId,
         isPaid: parsed.data.isPaid,
         fileKey,
+        thumbnailKey,
       },
     }));
 
@@ -163,7 +175,37 @@ notesRouter.delete('/:id', requireSuperAdmin(), asyncHandler(async (req: Request
   }
 
   await deleteFile(note.fileKey);
+  if (note.thumbnailKey) {
+    await deleteFile(note.thumbnailKey);
+  }
   await prisma.note.delete({ where: { id } });
 
   res.json({ data: { message: 'Note deleted' } });
+}));
+
+// GET /api/notes/:id/thumbnail — public streaming of thumbnail
+notesRouter.get('/:id/thumbnail', asyncHandler(async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  const note = await withRetry(() => prisma.note.findUnique({ where: { id } }));
+  if (!note || !note.thumbnailKey) {
+    res.status(404).json({ error: 'Thumbnail not found' });
+    return;
+  }
+
+  const s3Object = await getFileStream(note.thumbnailKey);
+
+  if (!s3Object.Body) {
+    res.status(404).json({ error: 'Thumbnail not found in storage' });
+    return;
+  }
+
+  res.setHeader('Content-Type', s3Object.ContentType || 'image/jpeg');
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  if (s3Object.ContentLength) {
+    res.setHeader('Content-Length', s3Object.ContentLength);
+  }
+
+  const { Readable } = await import('stream');
+  const readable = s3Object.Body as unknown as AsyncIterable<Uint8Array>;
+  Readable.from(readable).pipe(res);
 }));

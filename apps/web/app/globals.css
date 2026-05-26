@@ -1,28 +1,123 @@
 @import "tailwindcss";
 
-:root {
-  --black: #0a0a0a;
-  --white: #ffffff;
-  --gray-50: #f8f8f7;
-  --gray-100: #efefed;
-  --gray-200: #ddddd9;
-  --gray-400: #9a9994;
-  --gray-600: #5a5a57;
+/* ── Theme tokens ─────────────────────────────────────────────────────────────
+   Applied via [data-theme] on <html>. All colors should use these variables.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+:root,
+[data-theme="dark"] {
+  /* Backgrounds */
+  --bg-page: #0a0a0a;
+  --bg-surface: #111111;
+  --bg-surface-2: #1a1a1a;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-active: rgba(255, 255, 255, 0.08);
+
+  /* Borders */
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.15);
+
+  /* Text */
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.6);
+  --text-muted: rgba(255, 255, 255, 0.35);
+  --text-placeholder: rgba(255, 255, 255, 0.2);
+
+  /* Accent (call-to-actions) */
+  --accent-bg: #ffffff;
+  --accent-text: #0a0a0a;
+
+  /* Semantic */
+  --danger-bg: rgba(239, 68, 68, 0.15);
+  --danger-text: #fca5a5;
+  --danger-border: rgba(239, 68, 68, 0.3);
+  --success-bg: rgba(34, 197, 94, 0.1);
+  --success-text: #86efac;
+  --success-border: rgba(34, 197, 94, 0.3);
+  --info-bg: rgba(255, 255, 255, 0.06);
+  --info-text: rgba(255, 255, 255, 0.5);
+  --skeleton-bg: rgba(255, 255, 255, 0.04);
+  --overlay-bg: rgba(0, 0, 0, 0.7);
+
+  /* Navbar */
+  --navbar-scrolled-bg: rgba(10, 10, 10, 0.9);
+
+  /* Input */
+  --input-bg: rgba(255, 255, 255, 0.04);
+
+  /* Scrollbar */
+  --scrollbar-thumb: rgba(255, 255, 255, 0.12);
 }
 
+[data-theme="light"] {
+  /* Backgrounds */
+  --bg-page: #f5f4f0;
+  --bg-surface: #ffffff;
+  --bg-surface-2: #f0eeea;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-active: rgba(0, 0, 0, 0.07);
+
+  /* Borders */
+  --border: rgba(0, 0, 0, 0.09);
+  --border-strong: rgba(0, 0, 0, 0.18);
+
+  /* Text */
+  --text-primary: #111111;
+  --text-secondary: rgba(0, 0, 0, 0.6);
+  --text-muted: rgba(0, 0, 0, 0.38);
+  --text-placeholder: rgba(0, 0, 0, 0.25);
+
+  /* Accent */
+  --accent-bg: #111111;
+  --accent-text: #ffffff;
+
+  /* Semantic */
+  --danger-bg: rgba(220, 38, 38, 0.1);
+  --danger-text: #dc2626;
+  --danger-border: rgba(220, 38, 38, 0.2);
+  --success-bg: rgba(22, 163, 74, 0.1);
+  --success-text: #16a34a;
+  --success-border: rgba(22, 163, 74, 0.2);
+  --info-bg: rgba(0, 0, 0, 0.05);
+  --info-text: rgba(0, 0, 0, 0.6);
+  --skeleton-bg: rgba(0, 0, 0, 0.05);
+  --overlay-bg: rgba(0, 0, 0, 0.4);
+
+  /* Navbar */
+  --navbar-scrolled-bg: rgba(245, 244, 240, 0.92);
+
+  /* Input */
+  --input-bg: rgba(0, 0, 0, 0.03);
+
+  /* Scrollbar */
+  --scrollbar-thumb: rgba(0, 0, 0, 0.14);
+}
+
+/* ── Reset ────────────────────────────────────────────────────────────────── */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-body {
-  font-family: var(--font-sans), 'DM Sans', sans-serif;
-  background: var(--black);
-  color: var(--white);
-  -webkit-font-smoothing: antialiased;
+html {
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
+body {
+  font-family: var(--font-sans), 'DM Sans', sans-serif;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* ── Typography util ──────────────────────────────────────────────────────── */
 .font-serif {
   font-family: var(--font-serif), 'Playfair Display', serif;
 }
+
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }

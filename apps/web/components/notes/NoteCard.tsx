@@ -11,6 +11,8 @@ interface NoteCardProps {
 
 export default function NoteCard({ note, isAuthenticated, onClick }: NoteCardProps) {
   const router = useRouter();
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+  const thumbnailUrl = `${API_URL}/api/notes/${note.id}/thumbnail`;
 
   const handleClick = () => {
     if (!isAuthenticated) {
@@ -22,6 +24,18 @@ export default function NoteCard({ note, isAuthenticated, onClick }: NoteCardPro
 
   return (
     <div className="note-card" onClick={handleClick} role="button" tabIndex={0}>
+      <div className="note-card-image-container">
+        <img 
+          src={thumbnailUrl} 
+          alt={`Cover for ${note.title}`}
+          className="note-thumbnail"
+          onError={(e) => {
+            // Fallback if no thumbnail is available
+            (e.target as HTMLImageElement).style.display = 'none';
+            (e.target as HTMLImageElement).parentElement!.classList.add('no-thumbnail');
+          }}
+        />
+      </div>
       <div className="note-card-inner">
         <div className="note-subject">
           <span className="subject-badge">{note.subject.name}</span>
@@ -52,25 +66,51 @@ export default function NoteCard({ note, isAuthenticated, onClick }: NoteCardPro
 
       <style>{`
         .note-card {
-          background: rgba(255,255,255,0.02);
-          border: 1px solid rgba(255,255,255,0.05);
+          background: var(--bg-surface-2);
+          border: 1px solid var(--border);
           border-radius: 16px;
-          padding: 1.5rem;
           cursor: pointer;
           transition: transform 0.2s, background 0.2s, border-color 0.2s;
           display: flex;
           flex-direction: column;
           height: 100%;
+          overflow: hidden;
         }
         .note-card:hover {
           transform: translateY(-2px);
-          background: rgba(255,255,255,0.04);
-          border-color: rgba(255,255,255,0.1);
+          background: var(--bg-hover);
+          border-color: var(--border-strong);
+        }
+        .note-card-image-container {
+          width: 100%;
+          height: 160px;
+          background: var(--bg-surface);
+          border-bottom: 1px solid var(--border);
+          overflow: hidden;
+          position: relative;
+        }
+        .note-card-image-container.no-thumbnail {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: var(--skeleton-bg);
+        }
+        .note-card-image-container.no-thumbnail::after {
+          content: '📄';
+          font-size: 3rem;
+          opacity: 0.2;
+        }
+        .note-thumbnail {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          object-position: top;
         }
         .note-card-inner {
           display: flex;
           flex-direction: column;
           height: 100%;
+          padding: 1.5rem;
         }
         .note-subject {
           display: flex;
@@ -83,24 +123,25 @@ export default function NoteCard({ note, isAuthenticated, onClick }: NoteCardPro
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.05em;
-          color: rgba(255,255,255,0.5);
-          background: rgba(255,255,255,0.05);
+          color: var(--text-secondary);
+          background: var(--bg-surface);
+          border: 1px solid var(--border);
           padding: 0.25rem 0.5rem;
           border-radius: 6px;
         }
         .lock-icon {
-          color: rgba(255,255,255,0.3);
+          color: var(--text-muted);
         }
         .note-title {
           font-size: 1.25rem;
           font-weight: 600;
-          color: white;
+          color: var(--text-primary);
           margin-bottom: 0.5rem;
           line-height: 1.3;
         }
         .note-desc {
           font-size: 0.85rem;
-          color: rgba(255,255,255,0.5);
+          color: var(--text-secondary);
           line-height: 1.5;
           flex-grow: 1;
           margin-bottom: 1.5rem;
@@ -114,9 +155,9 @@ export default function NoteCard({ note, isAuthenticated, onClick }: NoteCardPro
           align-items: center;
           justify-content: space-between;
           padding-top: 1rem;
-          border-top: 1px solid rgba(255,255,255,0.05);
+          border-top: 1px solid var(--border);
           font-size: 0.75rem;
-          color: rgba(255,255,255,0.4);
+          color: var(--text-muted);
         }
       `}</style>
     </div>
