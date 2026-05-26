@@ -87,14 +87,22 @@ export default function Home() {
       {/* ─── About Section ────────────────────────────────────────────────────── */}
       <section id="about" className="section-about">
         <div className="about-container">
+
+          {/* Left — text */}
           <div className="about-content">
-            <h2 className="about-title font-serif">About AjitSir Academy</h2>
+            <p className="about-eyebrow">Meet Your Mentor</p>
+            <h2 className="about-title font-serif">About Ajit Sir</h2>
             <p className="about-desc">
-              AjitSir Academy is dedicated to helping aspirants crack the Maharashtra Teacher Eligibility Test (TET). 
-              With over 10 years of teaching experience, Ajit Sir provides top-quality study materials, 
-              mock tests, and video lectures in both Marathi and English.
+              With over <strong>10 years of dedicated teaching experience</strong>, Ajit Sir has guided
+              thousands of aspirants to crack the Maharashtra Teacher Eligibility Test (TET).
+              His clear explanations, structured study plans, and bilingual approach in Marathi &amp;
+              English make even the toughest topics easy to master.
             </p>
-            
+            <p className="about-desc">
+              From concept-building notes to full-length mock tests, every resource is crafted to
+              give you the best possible chance at success.
+            </p>
+
             <div className="stats-grid">
               <div className="stat-item">
                 <span className="stat-num font-serif">10k+</span>
@@ -119,6 +127,18 @@ export default function Home() {
               </a>
             </div>
           </div>
+
+          {/* Right — photo */}
+          <div className="about-image-wrap">
+            <div className="about-image-card">
+              <img
+                src="/ajit_sir_img.png"
+                alt="Ajit Sir — Founder of AjitSir Academy"
+                className="about-photo"
+              />
+            </div>
+          </div>
+
         </div>
       </section>
 
@@ -238,59 +258,84 @@ export default function Home() {
           border-top: 1px solid var(--border);
         }
         .about-container {
-          max-width: 800px;
+          max-width: 1100px;
           margin: 0 auto;
-          text-align: center;
+          display: grid;
+          grid-template-columns: 1fr 420px;
+          gap: 4rem;
+          align-items: center;
+        }
+        /* Left column */
+        .about-content {
+          display: flex;
+          flex-direction: column;
+        }
+        .about-eyebrow {
+          font-size: 0.8rem;
+          font-weight: 600;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--accent);
+          margin-bottom: 0.75rem;
         }
         .about-title {
           font-size: 2.5rem;
-          margin-bottom: 1.5rem;
+          margin-bottom: 1.25rem;
+          color: var(--text-primary);
+          line-height: 1.2;
         }
         .about-desc {
-          font-size: 1.1rem;
-          line-height: 1.6;
+          font-size: 1.05rem;
+          line-height: 1.75;
           color: var(--text-secondary);
-          margin-bottom: 3rem;
+          margin-bottom: 1.25rem;
+        }
+        .about-desc strong {
+          color: var(--text-primary);
+          font-weight: 600;
         }
         .stats-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
-          gap: 2rem;
-          margin-bottom: 3rem;
-          padding: 2rem 0;
+          gap: 1.5rem;
+          margin: 1.75rem 0 2rem;
+          padding: 1.75rem 0;
           border-top: 1px solid var(--border);
           border-bottom: 1px solid var(--border);
         }
         .stat-item {
           display: flex;
           flex-direction: column;
-          gap: 0.5rem;
+          gap: 0.35rem;
         }
         .stat-num {
-          font-size: 2.5rem;
+          font-size: 2.25rem;
           font-weight: 700;
-          color: var(--text-primary);
+          color: var(--accent);
+          line-height: 1;
         }
         .stat-label {
-          font-size: 0.85rem;
+          font-size: 0.8rem;
           text-transform: uppercase;
-          letter-spacing: 0.05em;
+          letter-spacing: 0.06em;
           color: var(--text-secondary);
         }
         .social-links {
           display: flex;
-          justify-content: center;
           gap: 1rem;
+          flex-wrap: wrap;
         }
         .social-btn {
-          padding: 0.75rem 1.5rem;
+          padding: 0.7rem 1.4rem;
           border-radius: 8px;
-          font-weight: 500;
+          font-weight: 600;
+          font-size: 0.9rem;
           text-decoration: none;
-          transition: transform 0.2s;
+          transition: transform 0.2s, box-shadow 0.2s;
         }
         .social-btn:hover {
           transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(0,0,0,0.15);
         }
         .youtube {
           background: #ef4444;
@@ -299,6 +344,42 @@ export default function Home() {
         .whatsapp {
           background: #22c55e;
           color: white;
+        }
+        /* Right column — image */
+        .about-image-wrap {
+          display: flex;
+          justify-content: center;
+          align-items: flex-end;
+        }
+        .about-image-card {
+          position: relative;
+          border-radius: 24px;
+          overflow: hidden;
+          background: linear-gradient(
+            160deg,
+            var(--bg-card) 0%,
+            var(--bg-subtle, var(--bg-card)) 100%
+          );
+          border: 1px solid var(--border);
+          box-shadow:
+            0 20px 60px rgba(0,0,0,0.12),
+            0 4px 16px rgba(0,0,0,0.08);
+          width: 100%;
+          max-width: 380px;
+          /* subtle inner glow that adapts to dark/light */
+          transition: box-shadow 0.3s;
+        }
+        .about-image-card:hover {
+          box-shadow:
+            0 28px 72px rgba(0,0,0,0.18),
+            0 6px 24px rgba(0,0,0,0.1);
+        }
+        .about-photo {
+          display: block;
+          width: 100%;
+          height: auto;
+          object-fit: cover;
+          /* PNG has transparent bg — card bg shows through cleanly */
         }
 
         /* Footer */
@@ -315,10 +396,32 @@ export default function Home() {
           50% { opacity: 0.5; }
         }
 
+        @media (max-width: 900px) {
+          .about-container {
+            grid-template-columns: 1fr;
+            gap: 2.5rem;
+          }
+          .about-image-wrap {
+            order: -1; /* image above text on mobile */
+          }
+          .about-image-card {
+            max-width: 280px;
+            margin: 0 auto;
+          }
+        }
         @media (max-width: 768px) {
           .stats-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+          }
+          .about-title {
+            font-size: 2rem;
+          }
+        }
+        @media (max-width: 480px) {
+          .stats-grid {
             grid-template-columns: 1fr;
-            gap: 1.5rem;
+            gap: 1.25rem;
           }
           .social-links {
             flex-direction: column;
