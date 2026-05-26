@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@ajitsir/shared": ["../../packages/shared/src/index.ts"]
     }
   },
   "include": [
