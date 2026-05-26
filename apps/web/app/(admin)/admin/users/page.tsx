@@ -204,130 +204,130 @@ export default function UsersPage() {
           display: flex; align-items: flex-start; justify-content: space-between;
           gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;
         }
-        .admin-page-title { font-size: 2rem; font-weight: 700; color: white; margin-bottom: 0.25rem; }
-        .admin-page-desc { color: rgba(255,255,255,0.45); font-size: 0.9rem; }
+        .admin-page-title { font-size: 2rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.25rem; }
+        .admin-page-desc { color: var(--text-secondary); font-size: 0.9rem; }
 
         .total-badge {
           padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.75rem;
-          background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.5);
+          background: var(--bg-surface-2); color: var(--text-secondary);
         }
 
         .search-bar { margin-bottom: 1.25rem; }
         .search-input {
           width: 100%; max-width: 400px; padding: 0.6rem 0.875rem;
-          background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
-          border-radius: 8px; color: white; font-size: 0.875rem; outline: none;
+          background: var(--input-bg); border: 1px solid var(--border);
+          border-radius: 8px; color: var(--text-primary); font-size: 0.875rem; outline: none;
         }
-        .search-input:focus { border-color: rgba(255,255,255,0.25); }
-        .search-input::placeholder { color: rgba(255,255,255,0.2); }
+        .search-input:focus { border-color: var(--border-strong); }
+        .search-input::placeholder { color: var(--text-placeholder); }
 
         .skeleton-list { display: flex; flex-direction: column; gap: 0.5rem; }
         .skeleton-row {
-          height: 56px; border-radius: 8px; background: rgba(255,255,255,0.04);
+          height: 56px; border-radius: 8px; background: var(--skeleton-bg);
           animation: pulse 1.5s ease-in-out infinite;
         }
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity: 0.5; } }
 
         .empty-state {
           padding: 4rem; text-align: center;
-          background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
-          border-radius: 14px; color: rgba(255,255,255,0.4);
+          background: var(--bg-surface-2); border: 1px solid var(--border);
+          border-radius: 14px; color: var(--text-secondary);
         }
 
-        .users-table-wrapper { overflow-x: auto; border-radius: 12px; border: 1px solid rgba(255,255,255,0.07); margin-bottom: 1rem; }
+        .users-table-wrapper { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 1rem; }
         .users-table { width: 100%; border-collapse: collapse; }
-        .users-table thead tr { border-bottom: 1px solid rgba(255,255,255,0.07); }
+        .users-table thead tr { border-bottom: 1px solid var(--border); }
         .users-table th {
           padding: 0.75rem 1rem; text-align: left;
           font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em;
-          color: rgba(255,255,255,0.35); background: rgba(255,255,255,0.02);
+          color: var(--text-muted); background: var(--bg-surface-2);
         }
         .users-table td {
-          padding: 0.875rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle;
+          padding: 0.875rem 1rem; border-bottom: 1px solid var(--border); vertical-align: middle;
         }
         .users-table tbody tr:last-child td { border-bottom: none; }
-        .users-table tbody tr:hover td { background: rgba(255,255,255,0.02); }
-        .row-self td { background: rgba(255,255,255,0.03); }
+        .users-table tbody tr:hover td { background: var(--bg-hover); }
+        .row-self td { background: var(--bg-active); }
 
         .user-name-cell { display: flex; align-items: center; gap: 0.65rem; }
         .user-avatar {
-          width: 28px; height: 28px; border-radius: 50%; background: rgba(255,255,255,0.1);
-          display: flex; align-items: center; justify-content: center;
-          font-size: 0.75rem; font-weight: 700; color: white; flex-shrink: 0;
+          width: 28px; height: 28px; border-radius: 50%; background: var(--bg-surface-2);
+          display: flex; align-items: center; justify-content: center; border: 1px solid var(--border);
+          font-size: 0.75rem; font-weight: 700; color: var(--text-primary); flex-shrink: 0;
         }
-        .user-name { font-size: 0.875rem; color: white; }
+        .user-name { font-size: 0.875rem; color: var(--text-primary); }
         .you-tag {
           font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 4px;
-          background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.4);
+          background: var(--info-bg); color: var(--info-text);
         }
 
         .role-badge {
           font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; white-space: nowrap;
         }
-        .role-badge--student { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.5); }
-        .role-badge--content_manager { background: rgba(139,92,246,0.15); color: #c4b5fd; }
-        .role-badge--super_admin { background: rgba(245,158,11,0.15); color: #fcd34d; }
+        .role-badge--student { background: var(--bg-surface-2); color: var(--text-secondary); }
+        .role-badge--content_manager { background: var(--info-bg); color: var(--info-text); border: 1px solid var(--border-strong); }
+        .role-badge--super_admin { background: var(--accent-bg); color: var(--accent-text); border: 1px solid var(--border-strong); }
 
         .plan-badge {
           font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px;
         }
-        .plan-badge--free { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.4); }
-        .plan-badge--paid { background: rgba(34,197,94,0.1); color: #86efac; }
+        .plan-badge--free { background: var(--bg-surface-2); color: var(--text-secondary); }
+        .plan-badge--paid { background: var(--success-bg); color: var(--success-text); }
 
-        .text-muted { color: rgba(255,255,255,0.35); }
+        .text-muted { color: var(--text-muted); }
         .text-sm { font-size: 0.8rem; }
 
         .change-role-btn {
           padding: 0.3rem 0.65rem; border-radius: 6px; font-size: 0.72rem;
-          border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04);
-          color: rgba(255,255,255,0.6); cursor: pointer; transition: all 0.15s;
+          border: 1px solid var(--border); background: var(--bg-surface-2);
+          color: var(--text-secondary); cursor: pointer; transition: all 0.15s;
         }
-        .change-role-btn:hover { background: rgba(255,255,255,0.08); color: white; }
+        .change-role-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 
         .pagination {
           display: flex; align-items: center; gap: 1rem; justify-content: center;
           padding-top: 0.5rem;
         }
         .page-btn {
-          padding: 0.45rem 1rem; background: rgba(255,255,255,0.05);
-          border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
-          color: white; font-size: 0.8rem; cursor: pointer; transition: background 0.15s;
+          padding: 0.45rem 1rem; background: var(--bg-surface-2);
+          border: 1px solid var(--border); border-radius: 8px;
+          color: var(--text-primary); font-size: 0.8rem; cursor: pointer; transition: background 0.15s;
         }
-        .page-btn:hover:not(:disabled) { background: rgba(255,255,255,0.09); }
+        .page-btn:hover:not(:disabled) { background: var(--bg-hover); }
         .page-btn:disabled { opacity: 0.4; cursor: default; }
-        .page-info { font-size: 0.8rem; color: rgba(255,255,255,0.4); }
+        .page-info { font-size: 0.8rem; color: var(--text-muted); }
 
         .modal-overlay {
-          position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.7);
+          position: fixed; inset: 0; z-index: 1000; background: var(--overlay-bg);
           backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 1rem;
         }
         .modal {
-          background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1);
+          background: var(--bg-surface); border: 1px solid var(--border);
           border-radius: 16px; padding: 2rem; max-width: 400px; width: 100%;
         }
-        .modal-title { font-size: 1.1rem; font-weight: 600; color: white; margin-bottom: 0.5rem; }
-        .modal-desc { color: rgba(255,255,255,0.5); font-size: 0.875rem; margin-bottom: 1.25rem; }
+        .modal-title { font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem; }
+        .modal-desc { color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1.25rem; }
         .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
 
         .role-options { display: flex; flex-direction: column; gap: 0.5rem; }
         .role-option {
           display: flex; flex-direction: column; gap: 0.15rem;
-          padding: 0.75rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);
+          padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border);
           cursor: pointer; transition: border-color 0.15s;
         }
         .role-option input { display: none; }
-        .role-option--selected { border-color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.04); }
-        .role-option-label { font-size: 0.875rem; color: white; font-weight: 500; }
-        .role-option-desc { font-size: 0.75rem; color: rgba(255,255,255,0.4); }
+        .role-option--selected { border-color: var(--border-strong); background: var(--bg-active); }
+        .role-option-label { font-size: 0.875rem; color: var(--text-primary); font-weight: 500; }
+        .role-option-desc { font-size: 0.75rem; color: var(--text-muted); }
 
         .btn-primary {
-          padding: 0.6rem 1.25rem; background: white; color: black; border: none; border-radius: 8px;
+          padding: 0.6rem 1.25rem; background: var(--accent-bg); color: var(--accent-text); border: none; border-radius: 8px;
           font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: opacity 0.15s;
         }
         .btn-primary:disabled { opacity: 0.7; cursor: not-allowed; }
         .btn-secondary {
-          padding: 0.6rem 1.25rem; background: rgba(255,255,255,0.06); color: white;
-          border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+          padding: 0.6rem 1.25rem; background: var(--bg-surface-2); color: var(--text-primary);
+          border: 1px solid var(--border); border-radius: 8px;
           font-size: 0.875rem; cursor: pointer;
         }
       `}</style>

@@ -5,6 +5,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import apiClient from '@/lib/api-client';
+import * as pdfjsLib from 'pdfjs-dist';
+
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+}
 
 interface Subject { id: string; name: string; }
 
@@ -14,6 +19,8 @@ export default function NoteUploadPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
+  const [thumbnail, setThumbnail] = useState<Blob | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', subjectId: '', isPaid: false });
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +43,9 @@ export default function NoteUploadPage() {
       fd.append('description', form.description);
       fd.append('subjectId', form.subjectId);
       fd.append('isPaid', String(form.isPaid));
+      if (thumbnail) {
+        fd.append('thumbnail', thumbnail, 'thumbnail.jpg');
+      }
 
       const { data } = await apiClient.post('/api/notes', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -56,12 +66,35 @@ export default function NoteUploadPage() {
     },
   });
 
-  const handleFile = (f: File) => {
+  const handleFile = async (f: File) => {
     if (f.type !== 'application/pdf') { setError('Only PDF files are allowed'); return; }
     if (f.size > 50 * 1024 * 1024) { setError('File must be under 50 MB'); return; }
     setError(null);
     setFile(f);
     if (!form.title) setForm(prev => ({ ...prev, title: f.name.replace('.pdf', '') }));
+
+    // Generate Thumbnail
+    try {
+      const arrayBuffer = await f.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      if (context) {
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        await page.render({ canvasContext: context, viewport }).promise;
+        canvas.toBlob((blob) => {
+          if (blob) {
+            setThumbnail(blob);
+            setThumbnailPreview(URL.createObjectURL(blob));
+          }
+        }, 'image/jpeg', 0.8);
+      }
+    } catch (err) {
+      console.error('Thumbnail generation failed:', err);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -115,9 +148,12 @@ export default function NoteUploadPage() {
                 <div className="file-name">{file.name}</div>
                 <div className="file-size">{(file.size / (1024 * 1024)).toFixed(2)} MB</div>
               </div>
+              {thumbnailPreview && (
+                <img src={thumbnailPreview} alt="Preview" style={{ height: '60px', width: 'auto', borderRadius: '4px', marginLeft: 'auto', marginRight: '1rem', objectFit: 'cover' }} />
+              )}
               <button
                 type="button" className="remove-file-btn"
-                onClick={e => { e.stopPropagation(); setFile(null); setUploadProgress(null); }}
+                onClick={e => { e.stopPropagation(); setFile(null); setUploadProgress(null); setThumbnail(null); setThumbnailPreview(null); }}
               >✕</button>
             </div>
           ) : (
@@ -200,76 +236,76 @@ export default function NoteUploadPage() {
       <style>{`
         .upload-page { max-width: 640px; }
         .admin-page-header { margin-bottom: 2rem; }
-        .admin-page-title { font-size: 2rem; font-weight: 700; color: white; }
-        .back-link { font-size: 0.8rem; color: rgba(255,255,255,0.4); text-decoration: none; }
-        .back-link:hover { color: rgba(255,255,255,0.7); }
+        .admin-page-title { font-size: 2rem; font-weight: 700; color: var(--text-primary); }
+        .back-link { font-size: 0.8rem; color: var(--text-muted); text-decoration: none; }
+        .back-link:hover { color: var(--text-secondary); }
 
         .upload-form {
-          background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07);
+          background: var(--bg-surface-2); border: 1px solid var(--border);
           border-radius: 16px; padding: 2rem;
           display: flex; flex-direction: column; gap: 1.5rem;
         }
 
         .form-error {
           padding: 0.75rem 1rem; border-radius: 8px;
-          background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
-          color: #fca5a5; font-size: 0.85rem;
+          background: var(--danger-bg); border: 1px solid var(--danger-border);
+          color: var(--danger-text); font-size: 0.85rem;
         }
 
         .drop-zone {
-          border: 2px dashed rgba(255,255,255,0.12); border-radius: 12px;
+          border: 2px dashed var(--border); border-radius: 12px;
           padding: 2rem; cursor: pointer; transition: all 0.2s;
           min-height: 120px; display: flex; align-items: center; justify-content: center;
         }
         .drop-zone:hover, .drop-zone--over {
-          border-color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.03);
+          border-color: var(--border-strong); background: var(--bg-hover);
         }
-        .drop-zone--filled { cursor: default; border-style: solid; border-color: rgba(255,255,255,0.12); }
+        .drop-zone--filled { cursor: default; border-style: solid; border-color: var(--border); }
 
         .drop-zone-prompt { text-align: center; }
         .drop-icon { font-size: 2rem; display: block; margin-bottom: 0.75rem; opacity: 0.4; }
-        .drop-text { font-size: 0.9rem; color: rgba(255,255,255,0.5); margin-bottom: 0.25rem; }
-        .drop-link { color: white; text-decoration: underline; }
-        .drop-hint { font-size: 0.75rem; color: rgba(255,255,255,0.25); }
+        .drop-text { font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.25rem; }
+        .drop-link { color: var(--text-primary); text-decoration: underline; }
+        .drop-hint { font-size: 0.75rem; color: var(--text-muted); }
 
         .drop-zone-filled {
           display: flex; align-items: center; gap: 1rem; width: 100%;
         }
         .file-icon { font-size: 2rem; flex-shrink: 0; }
-        .file-name { font-size: 0.9rem; color: white; font-weight: 500; word-break: break-all; }
-        .file-size { font-size: 0.75rem; color: rgba(255,255,255,0.4); margin-top: 0.15rem; }
+        .file-name { font-size: 0.9rem; color: var(--text-primary); font-weight: 500; word-break: break-all; }
+        .file-size { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem; }
         .remove-file-btn {
-          margin-left: auto; background: rgba(255,255,255,0.08); border: none;
-          color: rgba(255,255,255,0.5); border-radius: 50%; width: 28px; height: 28px;
+          margin-left: auto; background: var(--bg-surface-2); border: 1px solid var(--border);
+          color: var(--text-muted); border-radius: 50%; width: 28px; height: 28px;
           cursor: pointer; font-size: 0.75rem; flex-shrink: 0;
           display: flex; align-items: center; justify-content: center;
-          transition: background 0.15s;
+          transition: background 0.15s, color 0.15s;
         }
-        .remove-file-btn:hover { background: rgba(255,255,255,0.14); color: white; }
+        .remove-file-btn:hover { background: var(--bg-hover); color: var(--danger-text); border-color: var(--danger-border); }
 
         .progress-bar-wrapper { display: flex; align-items: center; gap: 0.75rem; }
         .progress-bar-track {
-          flex: 1; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;
+          flex: 1; height: 6px; background: var(--bg-surface-2); border-radius: 3px; overflow: hidden;
         }
         .progress-bar-fill {
-          height: 100%; background: white; border-radius: 3px; transition: width 0.3s;
+          height: 100%; background: var(--accent-bg); border-radius: 3px; transition: width 0.3s;
         }
-        .progress-text { font-size: 0.75rem; color: rgba(255,255,255,0.4); white-space: nowrap; }
+        .progress-text { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
 
         .form-group { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; }
-        .form-label { font-size: 0.8rem; font-weight: 500; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 0.05em; }
-        .optional { font-weight: 400; text-transform: none; color: rgba(255,255,255,0.3); }
+        .form-label { font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+        .optional { font-weight: 400; text-transform: none; color: var(--text-muted); }
 
         .form-input, .form-textarea, .form-select {
-          background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+          background: var(--input-bg); border: 1px solid var(--border);
           border-radius: 8px; padding: 0.65rem 0.875rem;
-          color: white; font-size: 0.9rem; font-family: inherit; outline: none;
+          color: var(--text-primary); font-size: 0.9rem; font-family: inherit; outline: none;
           transition: border-color 0.15s;
         }
-        .form-input:focus, .form-textarea:focus, .form-select:focus { border-color: rgba(255,255,255,0.3); }
-        .form-input::placeholder, .form-textarea::placeholder { color: rgba(255,255,255,0.2); }
+        .form-input:focus, .form-textarea:focus, .form-select:focus { border-color: var(--border-strong); }
+        .form-input::placeholder, .form-textarea::placeholder { color: var(--text-placeholder); }
         .form-textarea { resize: vertical; }
-        .form-select option { background: #1a1a1a; color: white; }
+        .form-select option { background: var(--bg-surface); color: var(--text-primary); }
 
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
 
@@ -277,25 +313,25 @@ export default function NoteUploadPage() {
         .toggle-input { display: none; }
         .toggle-track {
           width: 40px; height: 22px; border-radius: 11px;
-          background: rgba(255,255,255,0.1); position: relative; transition: background 0.2s; flex-shrink: 0;
+          background: var(--border); position: relative; transition: background 0.2s; flex-shrink: 0;
         }
-        .toggle-input:checked + .toggle-track { background: #22c55e; }
+        .toggle-input:checked + .toggle-track { background: var(--success-bg); }
         .toggle-thumb {
           position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
-          border-radius: 50%; background: white; transition: transform 0.2s;
+          border-radius: 50%; background: var(--success-text); transition: transform 0.2s;
         }
-        .toggle-input:checked + .toggle-track .toggle-thumb { transform: translateX(18px); }
-        .toggle-text { font-size: 0.8rem; color: rgba(255,255,255,0.5); }
+        .toggle-input:checked + .toggle-track .toggle-thumb { transform: translateX(18px); background: var(--success-text); }
+        .toggle-text { font-size: 0.8rem; color: var(--text-secondary); }
 
         .form-submit-row { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 0.5rem; }
         .btn-primary {
-          padding: 0.65rem 1.5rem; background: white; color: black; border: none; border-radius: 8px;
+          padding: 0.65rem 1.5rem; background: var(--accent-bg); color: var(--accent-text); border: none; border-radius: 8px;
           font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: opacity 0.15s; text-decoration: none;
         }
         .btn-primary:disabled { opacity: 0.7; cursor: not-allowed; }
         .btn-secondary {
-          padding: 0.65rem 1.25rem; background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.7);
-          border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+          padding: 0.65rem 1.25rem; background: var(--bg-surface-2); color: var(--text-secondary);
+          border: 1px solid var(--border); border-radius: 8px;
           font-size: 0.875rem; cursor: pointer; text-decoration: none;
         }
 

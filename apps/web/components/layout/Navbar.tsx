@@ -4,9 +4,11 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import useAuthStore from '@/lib/auth-store';
+import { useTheme } from '@/lib/theme';
 
 export default function Navbar() {
   const { user, logout, initialize, isInitialized } = useAuthStore();
+  const { theme, toggle } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -74,6 +76,31 @@ export default function Navbar() {
 
           {/* Desktop auth actions */}
           <div className="navbar-auth">
+            {/* Theme toggle */}
+            <button
+              id="theme-toggle-btn"
+              className="theme-toggle-btn"
+              onClick={toggle}
+              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            >
+              {theme === 'dark' ? (
+                // Sun icon
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="5"/>
+                  <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                  <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                </svg>
+              ) : (
+                // Moon icon
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+              )}
+            </button>
+
             {user ? (
               <div className="navbar-user" ref={dropdownRef}>
                 <button
@@ -145,7 +172,7 @@ export default function Navbar() {
           <div className="mobile-menu-panel">
             <div className="mobile-menu-brand">
               <span className="navbar-logo-dot" aria-hidden="true" />
-              <span className="font-serif" style={{ color: 'white', fontSize: '1rem' }}>AjitSir Academy</span>
+              <span className="font-serif" style={{ color: 'var(--text-primary)', fontSize: '1rem' }}>AjitSir Academy</span>
             </div>
 
             <nav className="mobile-menu-links">
@@ -159,8 +186,8 @@ export default function Navbar() {
                   <div className="mobile-menu-user">
                     <span className="navbar-avatar navbar-avatar--lg">{getInitials(user.name)}</span>
                     <div>
-                      <p style={{ color: 'white', fontSize: '0.9rem', fontWeight: 500 }}>{user.name}</p>
-                      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>{user.email}</p>
+                      <p style={{ color: 'var(--text-primary)', fontSize: '0.9rem', fontWeight: 500 }}>{user.name}</p>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{user.email}</p>
                     </div>
                   </div>
                   {(user.role === 'SUPER_ADMIN' || user.role === 'CONTENT_MANAGER') && (
@@ -193,9 +220,9 @@ export default function Navbar() {
         }
 
         .navbar--scrolled {
-          background: rgba(10,10,10,0.9);
+          background: var(--navbar-scrolled-bg);
           backdrop-filter: blur(12px);
-          border-bottom-color: rgba(255,255,255,0.08);
+          border-bottom-color: var(--border);
         }
 
         .navbar-inner {
@@ -219,7 +246,7 @@ export default function Navbar() {
         .navbar-logo-dot {
           width: 8px;
           height: 8px;
-          background: white;
+          background: var(--text-primary);
           border-radius: 50%;
           display: block;
           flex-shrink: 0;
@@ -228,7 +255,7 @@ export default function Navbar() {
         .navbar-logo-text {
           font-size: 1rem;
           font-weight: 500;
-          color: white;
+          color: var(--text-primary);
           letter-spacing: -0.01em;
         }
 
@@ -242,35 +269,59 @@ export default function Navbar() {
         .navbar-link {
           padding: 0.4rem 0.75rem;
           font-size: 0.85rem;
-          color: rgba(255,255,255,0.6);
+          color: var(--text-secondary);
           text-decoration: none;
           border-radius: 8px;
           transition: color 0.15s, background 0.15s;
         }
 
         .navbar-link:hover {
-          color: white;
-          background: rgba(255,255,255,0.06);
+          color: var(--text-primary);
+          background: var(--bg-hover);
         }
 
         .navbar-auth {
           flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
         }
 
         .navbar-login-btn {
           padding: 0.4rem 1rem;
           font-size: 0.85rem;
-          color: white;
+          color: var(--text-primary);
           text-decoration: none;
-          border: 1px solid rgba(255,255,255,0.2);
+          border: 1px solid var(--border-strong);
           border-radius: 8px;
           transition: background 0.15s, border-color 0.15s;
           white-space: nowrap;
         }
 
         .navbar-login-btn:hover {
-          background: rgba(255,255,255,0.06);
-          border-color: rgba(255,255,255,0.35);
+          background: var(--bg-hover);
+          border-color: var(--border-strong);
+        }
+
+        /* Theme toggle button */
+        .theme-toggle-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 36px;
+          height: 36px;
+          border-radius: 8px;
+          border: 1px solid var(--border);
+          background: none;
+          color: var(--text-secondary);
+          cursor: pointer;
+          transition: background 0.15s, color 0.15s, border-color 0.15s;
+          flex-shrink: 0;
+        }
+        .theme-toggle-btn:hover {
+          background: var(--bg-hover);
+          color: var(--text-primary);
+          border-color: var(--border-strong);
         }
 
         .navbar-user {
@@ -282,24 +333,24 @@ export default function Navbar() {
           align-items: center;
           gap: 0.5rem;
           background: none;
-          border: 1px solid rgba(255,255,255,0.12);
+          border: 1px solid var(--border);
           border-radius: 8px;
           padding: 0.35rem 0.75rem 0.35rem 0.4rem;
           cursor: pointer;
-          color: rgba(255,255,255,0.8);
+          color: var(--text-secondary);
           font-size: 0.85rem;
           transition: background 0.15s;
         }
 
         .navbar-avatar-btn:hover {
-          background: rgba(255,255,255,0.06);
+          background: var(--bg-hover);
         }
 
         .navbar-avatar {
           width: 28px;
           height: 28px;
-          background: white;
-          color: #0a0a0a;
+          background: var(--accent-bg);
+          color: var(--accent-text);
           border-radius: 50%;
           display: flex;
           align-items: center;
@@ -320,18 +371,19 @@ export default function Navbar() {
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
+          color: var(--text-primary);
         }
 
         .navbar-dropdown {
           position: absolute;
           top: calc(100% + 8px);
           right: 0;
-          background: #1a1a1a;
-          border: 1px solid rgba(255,255,255,0.1);
+          background: var(--bg-surface-2);
+          border: 1px solid var(--border);
           border-radius: 12px;
           padding: 0.5rem;
           min-width: 200px;
-          box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+          box-shadow: 0 20px 60px rgba(0,0,0,0.25);
           animation: dropdown-in 0.15s ease;
         }
 
@@ -346,19 +398,19 @@ export default function Navbar() {
 
         .navbar-dropdown-name {
           font-size: 0.85rem;
-          color: white;
+          color: var(--text-primary);
           font-weight: 500;
           margin-bottom: 0.2rem;
         }
 
         .navbar-dropdown-email {
           font-size: 0.75rem;
-          color: rgba(255,255,255,0.4);
+          color: var(--text-muted);
         }
 
         .navbar-dropdown-divider {
           height: 1px;
-          background: rgba(255,255,255,0.08);
+          background: var(--border);
           margin: 0.5rem 0;
         }
 
@@ -368,7 +420,7 @@ export default function Navbar() {
           text-align: left;
           padding: 0.5rem 0.75rem;
           font-size: 0.85rem;
-          color: rgba(255,255,255,0.7);
+          color: var(--text-secondary);
           text-decoration: none;
           border: none;
           background: none;
@@ -378,17 +430,17 @@ export default function Navbar() {
         }
 
         .navbar-dropdown-item:hover {
-          background: rgba(255,255,255,0.06);
-          color: white;
+          background: var(--bg-hover);
+          color: var(--text-primary);
         }
 
         .navbar-dropdown-item--danger {
-          color: rgba(248, 113, 113, 0.8);
+          color: var(--danger-text);
         }
 
         .navbar-dropdown-item--danger:hover {
-          background: rgba(239, 68, 68, 0.1);
-          color: #fca5a5;
+          background: var(--danger-bg);
+          color: var(--danger-text);
         }
 
         /* Hamburger */
@@ -408,7 +460,7 @@ export default function Navbar() {
           display: block;
           width: 22px;
           height: 1.5px;
-          background: white;
+          background: var(--text-primary);
           transition: transform 0.25s, opacity 0.25s;
           transform-origin: center;
         }
@@ -423,6 +475,10 @@ export default function Navbar() {
             display: none;
           }
           .navbar-hamburger {
+            display: flex;
+          }
+          /* Show theme toggle on mobile inline with hamburger */
+          .theme-toggle-btn {
             display: flex;
           }
         }
@@ -447,8 +503,8 @@ export default function Navbar() {
           right: 0;
           bottom: 0;
           width: min(320px, 85vw);
-          background: #111111;
-          border-left: 1px solid rgba(255,255,255,0.08);
+          background: var(--bg-surface);
+          border-left: 1px solid var(--border);
           display: flex;
           flex-direction: column;
           padding: 1.5rem;
@@ -478,19 +534,19 @@ export default function Navbar() {
         .mobile-menu-link {
           padding: 0.75rem 0.75rem;
           font-size: 1rem;
-          color: rgba(255,255,255,0.7);
+          color: var(--text-secondary);
           text-decoration: none;
           border-radius: 10px;
           transition: background 0.1s, color 0.1s;
         }
 
         .mobile-menu-link:hover {
-          background: rgba(255,255,255,0.06);
-          color: white;
+          background: var(--bg-hover);
+          color: var(--text-primary);
         }
 
         .mobile-menu-footer {
-          border-top: 1px solid rgba(255,255,255,0.08);
+          border-top: 1px solid var(--border);
           padding-top: 1.5rem;
           display: flex;
           flex-direction: column;
@@ -507,8 +563,8 @@ export default function Navbar() {
         .mobile-menu-login-btn {
           display: block;
           padding: 0.75rem 1rem;
-          background: white;
-          color: #0a0a0a;
+          background: var(--accent-bg);
+          color: var(--accent-text);
           text-decoration: none;
           border-radius: 10px;
           font-size: 0.9rem;
@@ -526,9 +582,9 @@ export default function Navbar() {
           width: 100%;
           padding: 0.65rem 0.75rem;
           font-size: 0.875rem;
-          color: rgba(255,255,255,0.7);
+          color: var(--text-secondary);
           text-decoration: none;
-          border: 1px solid rgba(255,255,255,0.1);
+          border: 1px solid var(--border);
           border-radius: 10px;
           background: none;
           cursor: pointer;
@@ -537,18 +593,18 @@ export default function Navbar() {
         }
 
         .mobile-menu-action-btn:hover {
-          background: rgba(255,255,255,0.06);
-          color: white;
+          background: var(--bg-hover);
+          color: var(--text-primary);
         }
 
         .mobile-menu-action-btn--danger {
-          color: rgba(248, 113, 113, 0.8);
-          border-color: rgba(239, 68, 68, 0.2);
+          color: var(--danger-text);
+          border-color: var(--danger-border);
         }
 
         .mobile-menu-action-btn--danger:hover {
-          background: rgba(239, 68, 68, 0.1);
-          color: #fca5a5;
+          background: var(--danger-bg);
+          color: var(--danger-text);
         }
       `}</style>
     </>

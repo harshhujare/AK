@@ -108,7 +108,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           display: flex;
           align-items: center;
           justify-content: center;
-          background: #0a0a0a;
+          background: var(--bg-page);
         }
         .admin-spinner {
           width: 32px; height: 32px;
@@ -122,15 +122,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .admin-shell {
           display: flex;
           min-height: 100vh;
-          background: #0a0a0a;
+          background: var(--bg-page);
         }
 
         /* ── Sidebar ── */
         .admin-sidebar {
           width: 240px;
           flex-shrink: 0;
-          background: #111;
-          border-right: 1px solid rgba(255,255,255,0.06);
+          background: var(--bg-surface);
+          border-right: 1px solid var(--border);
           display: flex;
           flex-direction: column;
           position: fixed;
@@ -146,13 +146,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           align-items: center;
           gap: 0.5rem;
           padding: 0 1.25rem 1.5rem;
-          border-bottom: 1px solid rgba(255,255,255,0.06);
+          border-bottom: 1px solid var(--border);
           margin-bottom: 0.75rem;
         }
 
         .admin-brand-dot {
           width: 8px; height: 8px;
-          background: white;
+          background: var(--text-primary);
           border-radius: 50%;
           flex-shrink: 0;
         }
@@ -160,7 +160,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .admin-brand-text {
           font-size: 1rem;
           font-weight: 600;
-          color: white;
+          color: var(--text-primary);
         }
 
         .admin-nav {
@@ -178,26 +178,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           padding: 0.6rem 0.75rem;
           border-radius: 8px;
           font-size: 0.875rem;
-          color: rgba(255,255,255,0.5);
+          color: var(--text-secondary);
           text-decoration: none;
           transition: background 0.15s, color 0.15s;
         }
 
         .admin-nav-item:hover {
-          background: rgba(255,255,255,0.05);
-          color: rgba(255,255,255,0.9);
+          background: var(--bg-hover);
+          color: var(--text-primary);
         }
 
         .admin-nav-item--active {
-          background: rgba(255,255,255,0.08);
-          color: white;
+          background: var(--bg-active);
+          color: var(--text-primary);
         }
 
         .admin-nav-icon { font-size: 1rem; }
 
         .admin-sidebar-footer {
           padding: 1rem 1.25rem 0;
-          border-top: 1px solid rgba(255,255,255,0.06);
+          border-top: 1px solid var(--border);
           display: flex;
           flex-direction: column;
           gap: 0.75rem;
@@ -205,15 +205,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         .admin-back-link {
           font-size: 0.75rem;
-          color: rgba(255,255,255,0.35);
+          color: var(--text-muted);
           text-decoration: none;
           transition: color 0.15s;
         }
-        .admin-back-link:hover { color: rgba(255,255,255,0.7); }
+        .admin-back-link:hover { color: var(--text-secondary); }
 
         .admin-user-chip {
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.07);
+          background: var(--bg-surface-2);
+          border: 1px solid var(--border);
           border-radius: 8px;
           padding: 0.5rem 0.75rem;
         }
@@ -223,14 +223,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           font-size: 0.65rem;
           text-transform: uppercase;
           letter-spacing: 0.06em;
-          color: rgba(255,255,255,0.35);
+          color: var(--text-muted);
           margin-bottom: 0.15rem;
         }
 
         .admin-user-name {
           display: block;
           font-size: 0.8rem;
-          color: white;
+          color: var(--text-primary);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -250,8 +250,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           position: fixed;
           bottom: 0; left: 0; right: 0;
           height: 60px;
-          background: #111;
-          border-top: 1px solid rgba(255,255,255,0.07);
+          background: var(--bg-surface);
+          border-top: 1px solid var(--border);
           z-index: 100;
           align-items: stretch;
           justify-content: space-around;
@@ -265,12 +265,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           justify-content: center;
           gap: 2px;
           text-decoration: none;
-          color: rgba(255,255,255,0.4);
+          color: var(--text-muted);
           font-size: 0.6rem;
           transition: color 0.15s;
         }
 
-        .admin-tab--active { color: white; }
+        .admin-tab--active { color: var(--text-primary); }
         .admin-tab-icon { font-size: 1.1rem; }
         .admin-tab-label { font-size: 0.55rem; }
 

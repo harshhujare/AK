@@ -148,45 +148,45 @@ export default function NewAnnouncementPage() {
       <style>{`
         .form-page { max-width: 640px; }
         .admin-page-header { margin-bottom: 2rem; }
-        .admin-page-title { font-size: 2rem; font-weight: 700; color: white; }
+        .admin-page-title { font-size: 2rem; font-weight: 700; color: var(--text-primary); }
 
-        .back-link { font-size: 0.8rem; color: rgba(255,255,255,0.4); text-decoration: none; }
-        .back-link:hover { color: rgba(255,255,255,0.7); }
+        .back-link { font-size: 0.8rem; color: var(--text-muted); text-decoration: none; }
+        .back-link:hover { color: var(--text-secondary); }
 
         .admin-form {
-          background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07);
+          background: var(--bg-surface-2); border: 1px solid var(--border);
           border-radius: 16px; padding: 2rem;
           display: flex; flex-direction: column; gap: 1.5rem;
         }
 
         .form-error {
           padding: 0.75rem 1rem; border-radius: 8px;
-          background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
-          color: #fca5a5; font-size: 0.85rem;
+          background: var(--danger-bg); border: 1px solid var(--danger-border);
+          color: var(--danger-text); font-size: 0.85rem;
         }
 
         .form-group { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; }
-        .form-label { font-size: 0.8rem; font-weight: 500; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 0.05em; }
-        .optional { font-weight: 400; text-transform: none; color: rgba(255,255,255,0.3); }
+        .form-label { font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+        .optional { font-weight: 400; text-transform: none; color: var(--text-muted); }
 
         .form-input, .form-textarea {
-          background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+          background: var(--input-bg); border: 1px solid var(--border);
           border-radius: 8px; padding: 0.65rem 0.875rem;
-          color: white; font-size: 0.9rem; font-family: inherit;
+          color: var(--text-primary); font-size: 0.9rem; font-family: inherit;
           transition: border-color 0.15s; outline: none;
         }
-        .form-input::placeholder, .form-textarea::placeholder { color: rgba(255,255,255,0.2); }
-        .form-input:focus, .form-textarea:focus { border-color: rgba(255,255,255,0.3); }
+        .form-input::placeholder, .form-textarea::placeholder { color: var(--text-placeholder); }
+        .form-input:focus, .form-textarea:focus { border-color: var(--border-strong); }
         .form-textarea { resize: vertical; }
-        .form-hint { font-size: 0.72rem; color: rgba(255,255,255,0.3); }
+        .form-hint { font-size: 0.72rem; color: var(--text-muted); }
 
         .type-selector { display: flex; gap: 0.75rem; }
         .type-btn {
-          flex: 1; padding: 0.75rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);
-          background: rgba(255,255,255,0.03); color: rgba(255,255,255,0.5);
+          flex: 1; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border);
+          background: var(--bg-surface-2); color: var(--text-secondary);
           font-size: 0.85rem; cursor: pointer; transition: all 0.15s; font-family: inherit;
         }
-        .type-btn--active { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.25); color: white; }
+        .type-btn--active { background: var(--bg-active); border-color: var(--border-strong); color: var(--text-primary); }
 
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
 
@@ -195,33 +195,33 @@ export default function NewAnnouncementPage() {
         .toggle-input { display: none; }
         .toggle-track {
           width: 40px; height: 22px; border-radius: 11px;
-          background: rgba(255,255,255,0.1); position: relative;
+          background: var(--border); position: relative;
           transition: background 0.2s; flex-shrink: 0;
         }
-        .toggle-input:checked + .toggle-track { background: #22c55e; }
+        .toggle-input:checked + .toggle-track { background: var(--success-bg); }
         .toggle-thumb {
           position: absolute; top: 3px; left: 3px;
           width: 16px; height: 16px; border-radius: 50%;
-          background: white; transition: transform 0.2s;
+          background: var(--success-text); transition: transform 0.2s;
         }
-        .toggle-input:checked + .toggle-track .toggle-thumb { transform: translateX(18px); }
-        .toggle-text { font-size: 0.8rem; color: rgba(255,255,255,0.6); }
+        .toggle-input:checked + .toggle-track .toggle-thumb { transform: translateX(18px); background: var(--success-text); }
+        .toggle-text { font-size: 0.8rem; color: var(--text-secondary); }
 
         .form-submit-row { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 0.5rem; }
 
         .btn-primary {
-          padding: 0.65rem 1.5rem; background: white; color: black;
+          padding: 0.65rem 1.5rem; background: var(--accent-bg); color: var(--accent-text);
           border: none; border-radius: 8px; font-size: 0.875rem; font-weight: 500;
           cursor: pointer; transition: opacity 0.15s; text-decoration: none;
         }
         .btn-primary:hover, .btn-primary:disabled { opacity: 0.8; }
 
         .btn-secondary {
-          padding: 0.65rem 1.25rem; background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.7);
-          border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+          padding: 0.65rem 1.25rem; background: var(--bg-surface-2); color: var(--text-secondary);
+          border: 1px solid var(--border); border-radius: 8px;
           font-size: 0.875rem; cursor: pointer; text-decoration: none; transition: background 0.15s;
         }
-        .btn-secondary:hover { background: rgba(255,255,255,0.08); }
+        .btn-secondary:hover { background: var(--bg-hover); }
 
         @media (max-width: 640px) {
           .form-row { grid-template-columns: 1fr; }
