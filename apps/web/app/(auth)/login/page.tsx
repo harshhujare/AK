@@ -1,11 +1,23 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import GoogleSignInButton from '@/components/auth/GoogleSignInButton';
+import useAuthStore from '@/lib/auth-store';
 
 function LoginContent() {
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { user, isInitialized } = useAuthStore();
+
+  useEffect(() => {
+    if (isInitialized && user) {
+      const callbackUrl = searchParams.get('callbackUrl') || '/';
+      router.replace(callbackUrl);
+    }
+  }, [isInitialized, user, router, searchParams]);
 
   return (
     <div className="login-page">

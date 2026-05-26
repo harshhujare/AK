@@ -4,6 +4,7 @@ import { prisma, withRetry } from '../lib/prisma';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../services/token';
 import { verifyGoogleIdToken } from '../services/google';
 import { RegisterSchema, LoginSchema, GoogleAuthSchema } from '@ajitsir/shared';
+import { asyncHandler } from '../lib/asyncHandler';
 
 export const authRouter = Router();
 
@@ -15,7 +16,7 @@ const COOKIE_OPTS = {
 };
 
 // POST /api/auth/register
-authRouter.post('/register', async (req: Request, res: Response) => {
+authRouter.post('/register', asyncHandler(async (req: Request, res: Response) => {
   const parsed = RegisterSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
@@ -41,10 +42,10 @@ authRouter.post('/register', async (req: Request, res: Response) => {
   res.status(201).json({
     data: { accessToken, user: { id: user.id, name: user.name, email: user.email, role: user.role, plan: user.plan } },
   });
-});
+}));
 
 // POST /api/auth/login
-authRouter.post('/login', async (req: Request, res: Response) => {
+authRouter.post('/login', asyncHandler(async (req: Request, res: Response) => {
   const parsed = LoginSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
@@ -71,10 +72,10 @@ authRouter.post('/login', async (req: Request, res: Response) => {
   res.json({
     data: { accessToken, user: { id: user.id, name: user.name, email: user.email, role: user.role, plan: user.plan } },
   });
-});
+}));
 
 // POST /api/auth/google — verify Google ID token from GIS
-authRouter.post('/google', async (req: Request, res: Response) => {
+authRouter.post('/google', asyncHandler(async (req: Request, res: Response) => {
   const parsed = GoogleAuthSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: 'idToken is required' });
@@ -107,10 +108,10 @@ authRouter.post('/google', async (req: Request, res: Response) => {
   res.json({
     data: { accessToken, user: { id: user.id, name: user.name, email: user.email, role: user.role, plan: user.plan } },
   });
-});
+}));
 
 // POST /api/auth/refresh
-authRouter.post('/refresh', async (req: Request, res: Response) => {
+authRouter.post('/refresh', asyncHandler(async (req: Request, res: Response) => {
   const token = req.cookies?.refreshToken;
   if (!token) {
     res.status(401).json({ error: 'No refresh token' });
@@ -130,7 +131,7 @@ authRouter.post('/refresh', async (req: Request, res: Response) => {
   } catch {
     res.status(401).json({ error: 'Invalid or expired refresh token' });
   }
-});
+}));
 
 // POST /api/auth/logout
 authRouter.post('/logout', (_req: Request, res: Response) => {
@@ -139,7 +140,7 @@ authRouter.post('/logout', (_req: Request, res: Response) => {
 });
 
 // GET /api/auth/me
-authRouter.get('/me', async (req: Request, res: Response) => {
+authRouter.get('/me', asyncHandler(async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Unauthorized' });
@@ -160,4 +161,4 @@ authRouter.get('/me', async (req: Request, res: Response) => {
   } catch {
     res.status(401).json({ error: 'Invalid token' });
   }
-});
+}));
