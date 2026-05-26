@@ -116,7 +116,7 @@ export default function GoogleSignInButton({ onError }: GoogleSignInButtonProps)
       {isLoading && (
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-          display: 'flex', alignItems: 'center', justify: 'center',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(255, 255, 255, 0.1)',
           backdropFilter: 'blur(1px)',
           borderRadius: '4px',

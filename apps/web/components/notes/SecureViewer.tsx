@@ -316,6 +316,7 @@ function PdfPage({ pageNumber, pdfDoc }: { pageNumber: number; pdfDoc: pdfjsLib.
 
       try {
         const page = await pdfDoc.getPage(pageNumber);
+        if (!isMounted) return;
         
         // Calculate scale to fit width (max 900px)
         const viewportUnscaled = page.getViewport({ scale: 1 });
@@ -342,11 +343,12 @@ function PdfPage({ pageNumber, pdfDoc }: { pageNumber: number; pdfDoc: pdfjsLib.
           transform: [dpr, 0, 0, dpr, 0, 0] // Apply DPR scaling
         };
 
+        if (!isMounted) return;
         renderTask = page.render(renderContext);
         await renderTask.promise;
 
       } catch (err: any) {
-        if (err?.name === 'RenderingCancelledException') {
+        if (err?.name === 'RenderingCancelledException' || err?.message?.includes('cancelled')) {
           // Expected when navigating away quickly
         } else {
           console.error(`Error rendering page ${pageNumber}:`, err);
