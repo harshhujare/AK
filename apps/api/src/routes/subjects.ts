@@ -21,7 +21,8 @@ subjectsRouter.post('/', requireAdmin(), asyncHandler(async (req: Request, res: 
     res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
     return;
   }
-  const subject = await prisma.subject.create({ data: parsed.data });
+  const { name, nameMarathi, order } = parsed.data;
+  const subject = await prisma.subject.create({ data: { name, nameMarathi, order } });
   res.status(201).json({ data: subject });
 }));
 
