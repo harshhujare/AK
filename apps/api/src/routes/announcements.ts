@@ -102,8 +102,8 @@ announcementsRouter.patch('/:id', requireAdmin(), asyncHandler(async (req: Reque
   res.json({ data: updated });
 }));
 
-// DELETE /api/announcements/:id — super admin only
-announcementsRouter.delete('/:id', requireSuperAdmin(), asyncHandler(async (req: Request, res: Response) => {
+// DELETE /api/announcements/:id — admin only
+announcementsRouter.delete('/:id', requireAdmin(), asyncHandler(async (req: Request, res: Response) => {
   const id = String(req.params.id);
   const existing = await prisma.announcement.findUnique({ where: { id } });
   if (!existing) {

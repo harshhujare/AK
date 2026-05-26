@@ -166,7 +166,7 @@ notesRouter.patch('/:id', requireAdmin(), asyncHandler(async (req: Request, res:
 }));
 
 // DELETE /api/notes/:id — admin
-notesRouter.delete('/:id', requireSuperAdmin(), asyncHandler(async (req: Request, res: Response) => {
+notesRouter.delete('/:id', requireAdmin(), asyncHandler(async (req: Request, res: Response) => {
   const id = String(req.params.id);
   const note = await prisma.note.findUnique({ where: { id } });
   if (!note) {
@@ -178,6 +178,7 @@ notesRouter.delete('/:id', requireSuperAdmin(), asyncHandler(async (req: Request
   if (note.thumbnailKey) {
     await deleteFile(note.thumbnailKey);
   }
+  await prisma.noteView.deleteMany({ where: { noteId: id } });
   await prisma.note.delete({ where: { id } });
 
   res.json({ data: { message: 'Note deleted' } });

@@ -26,8 +26,8 @@ subjectsRouter.post('/', requireAdmin(), asyncHandler(async (req: Request, res: 
   res.status(201).json({ data: subject });
 }));
 
-// DELETE /api/subjects/:id — super admin only
-subjectsRouter.delete('/:id', requireSuperAdmin(), asyncHandler(async (req: Request, res: Response) => {
+// DELETE /api/subjects/:id — admin only
+subjectsRouter.delete('/:id', requireAdmin(), asyncHandler(async (req: Request, res: Response) => {
   const id = String(req.params.id);
   const noteCount = await prisma.note.count({ where: { subjectId: id } });
   if (noteCount > 0) {
