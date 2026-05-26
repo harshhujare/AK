@@ -187,6 +187,8 @@ testsRouter.put('/:id', requireAdmin(), async (req: Request, res: Response) => {
 
 // DELETE /api/tests/:id
 testsRouter.delete('/:id', requireAdmin(), async (req: Request, res: Response) => {
-  await prisma.test.delete({ where: { id: String(req.params.id) } });
+  const id = String(req.params.id);
+  await prisma.testAttempt.deleteMany({ where: { testId: id } });
+  await prisma.test.delete({ where: { id } });
   res.json({ data: { message: 'Test deleted' } });
 });
