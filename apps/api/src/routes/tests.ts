@@ -149,9 +149,16 @@ testsRouter.post('/', requireAdmin(), async (req: Request, res: Response) => {
   const questions: typeof req.body.questions = req.body.questions || [];
   const parsedQs = questions.map((q: unknown) => CreateQuestionSchema.parse(q));
 
+  const { title, description, subjectId, isPaid } = parsed.data;
+
   const test = await prisma.test.create({
     data: {
-      ...parsed.data,
+      title,
+      description,
+      isPaid,
+      subject: {
+        connect: { id: subjectId },
+      },
       questions: {
         create: parsedQs,
       },
