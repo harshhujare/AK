@@ -60,9 +60,9 @@ export default function SubjectFilter({ selectedSubject, onSelect }: SubjectFilt
         .filter-chip {
           padding: 0.5rem 1.25rem;
           border-radius: 9999px;
-          border: 1px solid rgba(255,255,255,0.1);
-          background: rgba(255,255,255,0.02);
-          color: rgba(255,255,255,0.6);
+          border: 1px solid var(--border);
+          background: var(--bg-surface-2);
+          color: var(--text-secondary);
           font-size: 0.85rem;
           font-weight: 500;
           white-space: nowrap;
@@ -70,13 +70,14 @@ export default function SubjectFilter({ selectedSubject, onSelect }: SubjectFilt
           transition: all 0.2s;
         }
         .filter-chip:hover {
-          background: rgba(255,255,255,0.05);
-          color: white;
+          background: var(--bg-hover);
+          color: var(--text-primary);
+          border-color: var(--border-strong);
         }
         .filter-chip.active {
-          background: white;
-          color: black;
-          border-color: white;
+          background: var(--accent-bg);
+          color: var(--accent-text);
+          border-color: var(--accent-bg);
         }
         .subject-filter-skeleton {
           display: flex;
@@ -87,7 +88,7 @@ export default function SubjectFilter({ selectedSubject, onSelect }: SubjectFilt
           width: 100px;
           height: 36px;
           border-radius: 9999px;
-          background: rgba(255,255,255,0.05);
+          background: var(--skeleton-bg);
           animation: pulse 1.5s infinite ease-in-out;
         }
         @keyframes pulse {

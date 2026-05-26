@@ -72,7 +72,7 @@ export default function Slider({ announcements }: SliderProps) {
         .slider-container {
           position: relative;
           width: 100%;
-          max-width: 1200px;
+          max-width: 1350px;
           margin: 0 auto;
           border-radius: 20px;
           overflow: hidden;
@@ -90,7 +90,7 @@ export default function Slider({ announcements }: SliderProps) {
           flex: 0 0 100%;
           min-width: 0;
           position: relative;
-          aspect-ratio: 21/9;
+          aspect-ratio: 16/7;
           display: flex;
           align-items: center;
           justify-content: center;
