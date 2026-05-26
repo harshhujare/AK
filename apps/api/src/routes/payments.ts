@@ -1,10 +1,20 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middleware/auth';
-import { createRazorpayOrder, verifyRazorpaySignature, verifyWebhookSignature } from '../services/razorpay';
+import { createRazorpayOrder, verifyRazorpaySignature, verifyWebhookSignature, isRazorpayConfigured } from '../services/razorpay';
 import { CreateOrderSchema, VerifyPaymentSchema } from '@ajitsir/shared';
 
 export const paymentsRouter = Router();
+
+// Guard: if Razorpay keys are missing return 503 instead of crashing
+paymentsRouter.use((_req: Request, res: Response, next: NextFunction) => {
+  if (!isRazorpayConfigured()) {
+    res.status(503).json({ error: 'Payment service is not available' });
+    return;
+  }
+  next();
+});
+
 
 // Plan pricing config (paise)
 const PLAN_PRICING: Record<string, number> = {
