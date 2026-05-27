@@ -513,11 +513,11 @@ const LazyPdfPage = React.forwardRef<HTMLDivElement, LazyPdfPageProps>(
           const scale = containerWidth / viewportUnscaled.width;
           const viewport = page.getViewport({ scale });
 
-          // Physical pixels (canvas attribute)
+          // Physical pixels (canvas attribute) — setting canvas.width resets the 2D context
           canvas.width = Math.floor(viewport.width * dpr);
           canvas.height = Math.floor(viewport.height * dpr);
 
-          // Logical pixels (CSS) — must match container
+          // Logical pixels (CSS) — constrains visual display to container size
           canvas.style.width = `${Math.floor(viewport.width)}px`;
           canvas.style.height = `${Math.floor(viewport.height)}px`;
 
@@ -525,11 +525,17 @@ const LazyPdfPage = React.forwardRef<HTMLDivElement, LazyPdfPageProps>(
             setDimensions({ w: Math.floor(viewport.width), h: Math.floor(viewport.height) });
           }
 
+          // Scale the canvas context by dpr so PDF.js draws at full physical resolution.
+          // DO NOT use the `transform` render parameter — it applies on top of the viewport
+          // transform and causes content to render off-canvas on mobile (blank white pages).
+          // ctx.scale() here is safe because canvas.width assignment above resets the context.
+          ctx.scale(dpr, dpr);
+
+          // Render without transform — ctx.scale handles the DPR scaling
           const renderContext = {
             canvas,
             canvasContext: ctx,
             viewport,
-            transform: [dpr, 0, 0, dpr, 0, 0] as [number, number, number, number, number, number],
           };
 
           if (!isMounted) return;
