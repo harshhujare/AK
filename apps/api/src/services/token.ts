@@ -12,7 +12,7 @@ export function signAccessToken(payload: Omit<JwtPayload, 'iat' | 'exp'>): strin
 }
 
 export function signRefreshToken(userId: string): string {
-  return jwt.sign({ userId }, REFRESH_SECRET, { expiresIn: '7d' });
+  return jwt.sign({ userId }, REFRESH_SECRET, { expiresIn: '30d' });
 }
 
 export function verifyAccessToken(token: string): JwtPayload {
