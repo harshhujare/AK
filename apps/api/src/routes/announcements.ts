@@ -23,7 +23,7 @@ announcementsRouter.get('/', asyncHandler(async (_req: Request, res: Response) =
       isActive: true,
       order: true,
       createdAt: true,
-      // imageKey is deliberately NOT returned to the client, they use the /image endpoint
+      // imageKey is  deliberately NOT returned to the client, they use the /image endpoint
     },
   });
   res.json({ data: announcements });
