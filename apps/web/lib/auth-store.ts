@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { User } from '@ajitsir/shared';
 import apiClient from './api-client';
+import pdfCache from './pdf-cache';
 
 interface AuthState {
   user: User | null;
@@ -38,6 +39,8 @@ const useAuthStore = create<AuthState>((set, get) => ({
       localStorage.removeItem('accessToken');
       localStorage.removeItem('user');
     }
+    // Clear all cached PDFs so other users on shared devices cannot access them
+    void pdfCache.clearAll();
     set({ user: null, accessToken: null });
   },
 
