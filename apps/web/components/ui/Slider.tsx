@@ -56,6 +56,8 @@ export default function Slider({ announcements }: SliderProps) {
 
   if (!announcements || announcements.length === 0) return null;
 
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
   return (
     <div className="slider-container">
       <div className="embla" ref={emblaRef}>
@@ -83,15 +85,31 @@ export default function Slider({ announcements }: SliderProps) {
                   )}
                 </div>
               ) : (
-                <div className="slide-content">
-                  <h2 className="slide-title font-serif">{ann.title}</h2>
-                  {ann.description && <p className="slide-desc">{ann.description}</p>}
+                <div className="slide-image-wrapper">
+                  <img 
+                    src={`${apiUrl}/api/announcements/${ann.id}/image`} 
+                    alt={ann.title} 
+                    className="slide-image" 
+                    loading="lazy" 
+                  />
+                  <div className="slide-image-overlay">
+                    <h2 className="slide-title font-serif">{ann.title}</h2>
+                    {ann.description && <p className="slide-desc">{ann.description}</p>}
+                  </div>
                 </div>
               )}
             </div>
           ))}
         </div>
       </div>
+
+      {/* Manual Controls */}
+      <button className="slider-btn slider-btn--prev" onClick={() => emblaApi?.scrollPrev()} aria-label="Previous slide">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+      </button>
+      <button className="slider-btn slider-btn--next" onClick={() => emblaApi?.scrollNext()} aria-label="Next slide">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+      </button>
 
       {/* Dots */}
       <div className="slider-dots">
@@ -163,6 +181,49 @@ export default function Slider({ announcements }: SliderProps) {
           height: 100%;
           border: none;
         }
+        .slide-image-wrapper {
+          width: 100%;
+          height: 100%;
+          position: relative;
+        }
+        .slide-image {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+        .slide-image-overlay {
+          position: absolute;
+          bottom: 0; left: 0; right: 0;
+          padding: 3rem 2rem 2rem 2rem;
+          background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
+          text-align: center;
+        }
+        .slider-btn {
+          position: absolute;
+          top: 50%;
+          transform: translateY(-50%);
+          background: rgba(0,0,0,0.4);
+          color: white;
+          border: none;
+          width: 48px;
+          height: 48px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          backdrop-filter: blur(4px);
+          transition: background 0.2s, transform 0.2s;
+          z-index: 10;
+        }
+        .slider-btn:hover {
+          background: rgba(0,0,0,0.7);
+          transform: translateY(-50%) scale(1.1);
+        }
+        .slider-btn--prev { left: 1rem; }
+        .slider-btn--next { right: 1rem; }
+
         .slider-dots {
           position: absolute;
           bottom: 1rem;
@@ -190,6 +251,7 @@ export default function Slider({ announcements }: SliderProps) {
         }
         @media (max-width: 768px) {
           .embla__slide { aspect-ratio: 16/9; }
+          .slider-btn { display: none; }
         }
       `}</style>
     </div>

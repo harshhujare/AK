@@ -31,7 +31,7 @@ enum PaymentStatus {
 }
 
 enum AnnouncementType {
-  TEXT
+  IMAGE
   VIDEO
 }
 
@@ -132,7 +132,7 @@ model Announcement {
   id          String           @id @default(cuid())
   title       String
   description String?
-  type        AnnouncementType @default(TEXT)
+  type        AnnouncementType @default(IMAGE)
   youtubeUrl  String?          // YouTube video URL (if type = VIDEO)
   imageKey    String?          // S3 key for announcement image (optional)
   isActive    Boolean          @default(true)
