@@ -8,14 +8,24 @@ import { asyncHandler } from '../lib/asyncHandler';
 
 export const authRouter = Router();
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 const COOKIE_OPTS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
+  secure: isProduction,
   // 'none' is required when frontend (Vercel) and API are on different domains.
   // 'lax' blocks cross-origin POST cookies (Chrome 80+, Safari), breaking token refresh.
   // 'none' REQUIRES secure:true — only active in production (HTTPS).
-  sameSite: 'none' as const,
+  sameSite: (isProduction ? 'none' : 'lax') as 'none' | 'lax',
+  path: '/',
   maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days — keeps users signed in
+};
+
+const CLEAR_COOKIE_OPTS = {
+  httpOnly: COOKIE_OPTS.httpOnly,
+  secure: COOKIE_OPTS.secure,
+  sameSite: COOKIE_OPTS.sameSite,
+  path: COOKIE_OPTS.path,
 };
 
 // POST /api/auth/register
@@ -138,7 +148,7 @@ authRouter.post('/refresh', asyncHandler(async (req: Request, res: Response) => 
 
 // POST /api/auth/logout
 authRouter.post('/logout', (_req: Request, res: Response) => {
-  res.clearCookie('refreshToken');
+  res.clearCookie('refreshToken', CLEAR_COOKIE_OPTS);
   res.json({ data: { message: 'Logged out successfully' } });
 });
 

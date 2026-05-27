@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import WatermarkCanvas from './WatermarkCanvas';
 import type { NoteWithSubject } from '@/hooks/useNotes';
+import apiClient from '@/lib/api-client';
 
 // Use local worker copy in /public (PDF.js v5 .mjs not on cdnjs yet)
 if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
@@ -55,11 +56,20 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
         setFetchState({ stage: 'downloading', downloaded: 0, total: 0 });
 
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-        const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+        const fetchPdf = async () => {
+          const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+          return fetch(`${apiUrl}/api/notes/${note.id}/stream`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+        };
 
-        const response = await fetch(`${apiUrl}/api/notes/${note.id}/stream`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
+        let response = await fetchPdf();
+
+        if (response.status === 401 && typeof window !== 'undefined') {
+          const { data } = await apiClient.post('/api/auth/refresh');
+          localStorage.setItem('accessToken', data.data.accessToken);
+          response = await fetchPdf();
+        }
 
         if (!response.ok) {
           const msg =

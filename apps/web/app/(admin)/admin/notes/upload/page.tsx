@@ -11,7 +11,7 @@ interface Subject { id: string; name: string; }
 // Upload stage for clear UI feedback
 type UploadStage = 'idle' | 'preparing' | 'uploading' | 'saving' | 'done' | 'error';
 
-const MAX_FILE_MB = 200;
+const MAX_FILE_MB = 300;
 const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
 
 // Read only the first 2MB of a large PDF to generate thumbnail.
