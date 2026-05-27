@@ -4,7 +4,7 @@ import multer from 'multer';
 export const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50 MB max
+    fileSize: 200 * 1024 * 1024, // 200 MB max (large lecture PDFs)
   },
   fileFilter(_req, file, cb) {
     if (file.mimetype === 'application/pdf') {

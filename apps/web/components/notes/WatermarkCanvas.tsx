@@ -14,52 +14,68 @@ export default function WatermarkCanvas({ width, height }: WatermarkCanvasProps)
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !user) return;
+    if (!canvas) return;
 
+    // If no user, keep canvas hidden and do nothing — an invisible empty canvas
+    // with position:absolute and z-index:10 can block touch events on mobile.
+    if (!user) {
+      canvas.style.visibility = 'hidden';
+      return;
+    }
+
+    canvas.style.visibility = 'visible';
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Handle high DPI displays for crisp text
-    const dpr = window.devicePixelRatio || 1;
+    // Handle high DPI displays for crisp text.
+    // IMPORTANT: cap DPR at 2 — DPR 3 triples memory usage with no visual gain on small screens.
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    // Physical pixel dimensions (canvas attribute)
     canvas.width = width * dpr;
     canvas.height = height * dpr;
-    ctx.scale(dpr, dpr);
 
+    // Logical display dimensions (CSS) — must match the wrapper div size exactly.
+    // Without this, on 3× DPR phones the canvas element overflows its container
+    // and covers the PDF canvas below it, making pages look blank.
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, width, height);
 
     // Mask email: j***@gmail.com
     const emailParts = user.email.split('@');
     const maskedEmail = emailParts[0].charAt(0) + '***@' + emailParts[1];
-    
+
     const dateStr = new Date().toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'short',
-      year: 'numeric'
+      year: 'numeric',
     });
 
     const watermarkText = `${user.name} · ${maskedEmail} · ${dateStr}`;
 
     // Setup text style
-    ctx.font = 'bold 24px "DM Sans", sans-serif';
+    ctx.font = 'bold 20px "DM Sans", sans-serif';
     ctx.fillStyle = 'rgba(150, 150, 150, 0.15)'; // Very faint
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
     // Draw watermark diagonally across the page repeatedly
     const stepX = 400;
-    const stepY = 300;
-    
-    // Rotate canvas for diagonal text
-    ctx.save();
-    ctx.rotate((-30 * Math.PI) / 180); // -30 degrees
+    const stepY = 280;
 
-    // We need to draw outside the literal bounds because of rotation
+    ctx.save();
+    ctx.rotate((-30 * Math.PI) / 180); // -30 degrees diagonal
+
+    // Draw outside the literal bounds to cover full area after rotation
     for (let x = -width; x < width * 2; x += stepX) {
       for (let y = -height; y < height * 2; y += stepY) {
         ctx.fillText(watermarkText, x, y);
       }
     }
-    
+
     ctx.restore();
   }, [width, height, user]);
 
@@ -72,8 +88,9 @@ export default function WatermarkCanvas({ width, height }: WatermarkCanvasProps)
         left: 0,
         width: `${width}px`,
         height: `${height}px`,
-        pointerEvents: 'none', // Crucial: lets clicks pass through to PDF if needed
+        pointerEvents: 'none', // Never intercept clicks/touches
         zIndex: 10,
+        visibility: user ? 'visible' : 'hidden',
       }}
       aria-hidden="true"
     />
