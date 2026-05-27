@@ -14,7 +14,7 @@ export const apiClient = axios.create({
 // ─── Request interceptor — inject access token ─────────────────────────────
 apiClient.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    const token = sessionStorage.getItem('accessToken');
+    const token = localStorage.getItem('accessToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -68,7 +68,7 @@ apiClient.interceptors.response.use(
         const newToken = data.data.accessToken;
 
         if (typeof window !== 'undefined') {
-          sessionStorage.setItem('accessToken', newToken);
+          localStorage.setItem('accessToken', newToken);
         }
 
         processQueue(null, newToken);
@@ -78,8 +78,8 @@ apiClient.interceptors.response.use(
         processQueue(refreshError, null);
         // Clear session — user needs to log in again
         if (typeof window !== 'undefined') {
-          sessionStorage.removeItem('accessToken');
-          sessionStorage.removeItem('user');
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('user');
         }
         return Promise.reject(refreshError);
       } finally {

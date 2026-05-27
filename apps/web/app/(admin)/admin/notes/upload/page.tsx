@@ -1,13 +1,22 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useRef, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import apiClient from '@/lib/api-client';
-// pdfjs-dist is imported dynamically inside the file handler to prevent server prerender errors (DOMMatrix is not defined)
 
 interface Subject { id: string; name: string; }
+
+// Upload stage for clear UI feedback
+type UploadStage = 'idle' | 'preparing' | 'uploading' | 'saving' | 'done' | 'error';
+
+const MAX_FILE_MB = 300;
+const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
+
+// Read only the first 2MB of a large PDF to generate thumbnail.
+// Loading the full 200MB just for page 1 can crash mobile browsers.
+const THUMBNAIL_READ_BYTES = 2 * 1024 * 1024;
 
 export default function NoteUploadPage() {
   const router = useRouter();
@@ -20,7 +29,20 @@ export default function NoteUploadPage() {
   const [dragOver, setDragOver] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', subjectId: '', isPaid: false });
   const [error, setError] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [stage, setStage] = useState<UploadStage>('idle');
+  const [uploadProgress, setUploadProgress] = useState(0); // 0–100
+
+  // Warn before navigating away during upload
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (stage === 'uploading' || stage === 'preparing') {
+        e.preventDefault();
+        e.returnValue = 'Upload is in progress. Are you sure you want to leave?';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [stage]);
 
   const { data: subjects } = useQuery({
     queryKey: ['subjects'],
@@ -30,61 +52,36 @@ export default function NoteUploadPage() {
     },
   });
 
-  const uploadMutation = useMutation({
-    mutationFn: async () => {
-      if (!file) throw new Error('No file selected');
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('title', form.title);
-      fd.append('description', form.description);
-      fd.append('subjectId', form.subjectId);
-      fd.append('isPaid', String(form.isPaid));
-      if (thumbnail) {
-        fd.append('thumbnail', thumbnail, 'thumbnail.jpg');
-      }
-
-      const { data } = await apiClient.post('/api/notes', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        onUploadProgress: (e) => {
-          if (e.total) setUploadProgress(Math.round((e.loaded / e.total) * 100));
-        },
-      });
-      return data;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-notes'] });
-      qc.invalidateQueries({ queryKey: ['notes'] });
-      router.push('/admin/notes');
-    },
-    onError: (err: any) => {
-      setError(err?.response?.data?.error || 'Upload failed');
-      setUploadProgress(null);
-    },
-  });
-
+  // ─── Handle file selection ───────────────────────────────────────────────
   const handleFile = async (f: File) => {
     if (f.type !== 'application/pdf') { setError('Only PDF files are allowed'); return; }
-    if (f.size > 50 * 1024 * 1024) { setError('File must be under 50 MB'); return; }
+    if (f.size > MAX_FILE_BYTES) { setError(`File must be under ${MAX_FILE_MB} MB`); return; }
     setError(null);
     setFile(f);
-    if (!form.title) setForm(prev => ({ ...prev, title: f.name.replace('.pdf', '') }));
+    if (!form.title) setForm(prev => ({ ...prev, title: f.name.replace(/\.pdf$/i, '') }));
 
-    // Generate Thumbnail
+    // ── Thumbnail generation ─────────────────────────────────────────────
+    // Only read the first 2MB chunk — sufficient for PDF.js to find page 1.
+    // Avoids loading the full 200MB file into memory just for a thumbnail.
     try {
       const pdfjsLib = await import('pdfjs-dist');
       if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
       }
-      const arrayBuffer = await f.arrayBuffer();
+
+      const chunk = f.slice(0, THUMBNAIL_READ_BYTES);
+      const arrayBuffer = await chunk.arrayBuffer();
+
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const page = await pdf.getPage(1);
-      const viewport = page.getViewport({ scale: 1.5 });
+      const viewport = page.getViewport({ scale: 1.2 }); // slightly lower scale = faster
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
       if (context) {
         canvas.height = viewport.height;
         canvas.width = viewport.width;
-        await page.render({ canvas: canvas, canvasContext: context, viewport }).promise;
+        await page.render({ canvas, canvasContext: context, viewport }).promise;
         canvas.toBlob((blob) => {
           if (blob) {
             setThumbnail(blob);
@@ -92,8 +89,10 @@ export default function NoteUploadPage() {
           }
         }, 'image/jpeg', 0.8);
       }
+      pdf.destroy();
     } catch (err) {
-      console.error('Thumbnail generation failed:', err);
+      // Thumbnail is optional — don't block upload on failure
+      console.warn('Thumbnail generation skipped:', err);
     }
   };
 
@@ -104,16 +103,64 @@ export default function NoteUploadPage() {
     if (f) handleFile(f);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // ─── Submit / upload ─────────────────────────────────────────────────────
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     if (!file) { setError('Please select a PDF file'); return; }
     if (!form.title.trim()) { setError('Title is required'); return; }
     if (!form.subjectId) { setError('Please select a subject'); return; }
-    uploadMutation.mutate();
+
+    setError(null);
+    setStage('preparing');
+    setUploadProgress(0);
+
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('title', form.title.trim());
+    fd.append('description', form.description);
+    fd.append('subjectId', form.subjectId);
+    fd.append('isPaid', String(form.isPaid));
+    if (thumbnail) fd.append('thumbnail', thumbnail, 'thumbnail.jpg');
+
+    try {
+      setStage('uploading');
+
+      await apiClient.post('/api/notes', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        // No timeout for large uploads — a 200 MB file on slow connection can take 10+ min.
+        // The default 15s timeout on apiClient would kill the request prematurely.
+        timeout: 0,
+        onUploadProgress: (e) => {
+          if (e.total) {
+            setUploadProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        },
+      });
+
+      setStage('saving');
+      // Short pause so user sees the "Saving…" state before redirect
+      await new Promise(r => setTimeout(r, 600));
+
+      qc.invalidateQueries({ queryKey: ['admin-notes'] });
+      qc.invalidateQueries({ queryKey: ['notes'] });
+      setStage('done');
+      router.push('/admin/notes');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      setError(e?.response?.data?.error || 'Upload failed. Check your connection and try again.');
+      setStage('error');
+      setUploadProgress(0);
+    }
   };
 
-  const isPending = uploadMutation.isPending;
+  const isPending = stage === 'preparing' || stage === 'uploading' || stage === 'saving';
+  const uploadedMB = file ? ((uploadProgress / 100) * file.size / (1024 * 1024)).toFixed(1) : '0';
+  const totalMB = file ? (file.size / (1024 * 1024)).toFixed(1) : '0';
+
+  // Stage step booleans — computed here so TypeScript sees the full UploadStage type
+  const preparingDone = stage === 'uploading' || stage === 'saving' || stage === 'done';
+  const uploadingDone = stage === 'saving' || stage === 'done';
+  const savingDone    = stage === 'done';
 
   return (
     <div className="upload-page">
@@ -149,29 +196,62 @@ export default function NoteUploadPage() {
                 <div className="file-size">{(file.size / (1024 * 1024)).toFixed(2)} MB</div>
               </div>
               {thumbnailPreview && (
-                <img src={thumbnailPreview} alt="Preview" style={{ height: '60px', width: 'auto', borderRadius: '4px', marginLeft: 'auto', marginRight: '1rem', objectFit: 'cover' }} />
+                <img
+                  src={thumbnailPreview}
+                  alt="Preview"
+                  style={{ height: '60px', width: 'auto', borderRadius: '4px', marginLeft: 'auto', marginRight: '1rem', objectFit: 'cover' }}
+                />
               )}
               <button
-                type="button" className="remove-file-btn"
-                onClick={e => { e.stopPropagation(); setFile(null); setUploadProgress(null); setThumbnail(null); setThumbnailPreview(null); }}
+                type="button"
+                className="remove-file-btn"
+                disabled={isPending}
+                onClick={e => {
+                  e.stopPropagation();
+                  setFile(null);
+                  setUploadProgress(0);
+                  setThumbnail(null);
+                  setThumbnailPreview(null);
+                  setStage('idle');
+                }}
               >✕</button>
             </div>
           ) : (
             <div className="drop-zone-prompt">
               <span className="drop-icon">⬆</span>
               <p className="drop-text">Drop a PDF here or <span className="drop-link">browse</span></p>
-              <p className="drop-hint">PDF only · Max 50 MB</p>
+              <p className="drop-hint">PDF only · Max {MAX_FILE_MB} MB</p>
             </div>
           )}
         </div>
 
-        {/* Progress bar */}
-        {uploadProgress !== null && (
-          <div className="progress-bar-wrapper">
-            <div className="progress-bar-track">
-              <div className="progress-bar-fill" style={{ width: `${uploadProgress}%` }} />
+        {/* ── Upload progress ── */}
+        {isPending && (
+          <div className="upload-status-block">
+            {/* Stage indicators */}
+            <div className="stage-row">
+              <StageStep label="Preparing" active={stage === 'preparing'} done={preparingDone} />
+              <div className="stage-connector" />
+              <StageStep label="Uploading" active={stage === 'uploading'} done={uploadingDone} />
+              <div className="stage-connector" />
+              <StageStep label="Saving" active={stage === 'saving'} done={savingDone} />
             </div>
-            <span className="progress-text">{uploadProgress}%</span>
+
+            {/* Progress bar */}
+            {stage === 'uploading' && (
+              <div className="progress-bar-wrapper">
+                <div className="progress-bar-track">
+                  <div className="progress-bar-fill" style={{ width: `${uploadProgress}%` }} />
+                </div>
+                <span className="progress-text">
+                  {uploadedMB} / {totalMB} MB ({uploadProgress}%)
+                </span>
+              </div>
+            )}
+
+            {stage === 'saving' && (
+              <p className="saving-hint">Saving to database… almost done!</p>
+            )}
           </div>
         )}
 
@@ -183,6 +263,7 @@ export default function NoteUploadPage() {
             value={form.title}
             onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
             required
+            disabled={isPending}
           />
         </div>
 
@@ -193,6 +274,7 @@ export default function NoteUploadPage() {
             placeholder="Brief summary of the note content…"
             value={form.description}
             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+            disabled={isPending}
           />
         </div>
 
@@ -204,6 +286,7 @@ export default function NoteUploadPage() {
               value={form.subjectId}
               onChange={e => setForm(f => ({ ...f, subjectId: e.target.value }))}
               required
+              disabled={isPending}
             >
               <option value="">Select subject…</option>
               {subjects?.map(sub => (
@@ -217,6 +300,7 @@ export default function NoteUploadPage() {
             <label className="toggle-label">
               <input type="checkbox" className="toggle-input"
                 checked={form.isPaid}
+                disabled={isPending}
                 onChange={e => setForm(f => ({ ...f, isPaid: e.target.checked }))}
               />
               <span className="toggle-track"><span className="toggle-thumb" /></span>
@@ -228,7 +312,13 @@ export default function NoteUploadPage() {
         <div className="form-submit-row">
           <Link href="/admin/notes" className="btn-secondary">Cancel</Link>
           <button type="submit" className="btn-primary" disabled={isPending}>
-            {isPending ? (uploadProgress !== null ? `Uploading ${uploadProgress}%…` : 'Uploading…') : '⬆ Upload to S3'}
+            {stage === 'uploading'
+              ? `Uploading ${uploadProgress}%…`
+              : stage === 'saving'
+              ? 'Saving…'
+              : stage === 'preparing'
+              ? 'Preparing…'
+              : '⬆ Upload to S3'}
           </button>
         </div>
       </form>
@@ -245,7 +335,6 @@ export default function NoteUploadPage() {
           border-radius: 16px; padding: 2rem;
           display: flex; flex-direction: column; gap: 1.5rem;
         }
-
         .form-error {
           padding: 0.75rem 1rem; border-radius: 8px;
           background: var(--danger-bg); border: 1px solid var(--danger-border);
@@ -268,9 +357,7 @@ export default function NoteUploadPage() {
         .drop-link { color: var(--text-primary); text-decoration: underline; }
         .drop-hint { font-size: 0.75rem; color: var(--text-muted); }
 
-        .drop-zone-filled {
-          display: flex; align-items: center; gap: 1rem; width: 100%;
-        }
+        .drop-zone-filled { display: flex; align-items: center; gap: 1rem; width: 100%; }
         .file-icon { font-size: 2rem; flex-shrink: 0; }
         .file-name { font-size: 0.9rem; color: var(--text-primary); font-weight: 500; word-break: break-all; }
         .file-size { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem; }
@@ -281,16 +368,82 @@ export default function NoteUploadPage() {
           display: flex; align-items: center; justify-content: center;
           transition: background 0.15s, color 0.15s;
         }
-        .remove-file-btn:hover { background: var(--bg-hover); color: var(--danger-text); border-color: var(--danger-border); }
+        .remove-file-btn:hover:not(:disabled) { background: var(--bg-hover); color: var(--danger-text); border-color: var(--danger-border); }
+        .remove-file-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+        /* Upload status block */
+        .upload-status-block {
+          background: var(--bg-surface);
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          padding: 1.25rem;
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+
+        /* Stage steps */
+        .stage-row {
+          display: flex;
+          align-items: center;
+          gap: 0;
+        }
+        .stage-connector {
+          flex: 1;
+          height: 1px;
+          background: var(--border);
+          margin: 0 0.5rem;
+        }
+        .stage-step {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 0.3rem;
+          min-width: 60px;
+        }
+        .stage-dot {
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: var(--border);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.6rem;
+          transition: background 0.3s;
+        }
+        .stage-dot.active {
+          background: var(--accent-bg);
+          animation: pulse-dot 1s ease-in-out infinite;
+        }
+        .stage-dot.done {
+          background: var(--success-bg);
+          color: var(--success-text);
+        }
+        .stage-dot.done::after { content: '✓'; font-size: 0.65rem; font-weight: 700; color: var(--success-text); }
+        .stage-label {
+          font-size: 0.65rem;
+          color: var(--text-muted);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+        .stage-label.active { color: var(--text-primary); font-weight: 600; }
+
+        @keyframes pulse-dot {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.2); opacity: 0.7; }
+        }
+
+        /* Progress bar */
         .progress-bar-wrapper { display: flex; align-items: center; gap: 0.75rem; }
         .progress-bar-track {
           flex: 1; height: 6px; background: var(--bg-surface-2); border-radius: 3px; overflow: hidden;
         }
         .progress-bar-fill {
-          height: 100%; background: var(--accent-bg); border-radius: 3px; transition: width 0.3s;
+          height: 100%; background: var(--accent-bg); border-radius: 3px; transition: width 0.4s;
         }
         .progress-text { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
+        .saving-hint { font-size: 0.78rem; color: var(--text-muted); text-align: center; }
 
         .form-group { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; }
         .form-label { font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
@@ -304,6 +457,7 @@ export default function NoteUploadPage() {
         }
         .form-input:focus, .form-textarea:focus, .form-select:focus { border-color: var(--border-strong); }
         .form-input::placeholder, .form-textarea::placeholder { color: var(--text-placeholder); }
+        .form-input:disabled, .form-textarea:disabled, .form-select:disabled { opacity: 0.6; }
         .form-textarea { resize: vertical; }
         .form-select option { background: var(--bg-surface); color: var(--text-primary); }
 
@@ -320,7 +474,7 @@ export default function NoteUploadPage() {
           position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
           border-radius: 50%; background: var(--success-text); transition: transform 0.2s;
         }
-        .toggle-input:checked + .toggle-track .toggle-thumb { transform: translateX(18px); background: var(--success-text); }
+        .toggle-input:checked + .toggle-track .toggle-thumb { transform: translateX(18px); }
         .toggle-text { font-size: 0.8rem; color: var(--text-secondary); }
 
         .form-submit-row { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 0.5rem; }
@@ -338,8 +492,19 @@ export default function NoteUploadPage() {
         @media (max-width: 600px) {
           .form-row { grid-template-columns: 1fr; }
           .upload-form { padding: 1.25rem; }
+          .stage-label { font-size: 0.58rem; }
         }
       `}</style>
+    </div>
+  );
+}
+
+// ─── Stage step indicator ───────────────────────────────────────────────────────
+function StageStep({ label, active, done }: { label: string; active: boolean; done: boolean }) {
+  return (
+    <div className="stage-step">
+      <div className={`stage-dot ${active ? 'active' : ''} ${done ? 'done' : ''}`} />
+      <span className={`stage-label ${active ? 'active' : ''}`}>{label}</span>
     </div>
   );
 }
