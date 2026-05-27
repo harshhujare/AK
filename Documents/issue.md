@@ -1,3 +1,4 @@
+date of issue : 26-05-2026 
 # all the issues that are faced by users on live site
 # 1. user logs out automatically very frequently 
 - probable cause is short lived access token and refresh token 
@@ -28,4 +29,8 @@ admin can upload images for the anouncement also
 2. curruntly the slider is running on 3 or 4 seconds but it dont have controlls to slide left or right manually 
 we have to add controls to slide left or right manually also 
 and for mobile device dont show controll buttuns they can wipe with fingers 
-3. 
+
+date:28-05-2026
+
+1. we have to improve the ux for pdf viewer 
+- in currunt pdf viewer user can zoom the pdf if he tries the whole page gets zoomed 

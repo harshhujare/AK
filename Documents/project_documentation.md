@@ -615,6 +615,24 @@ npx prisma db push         # Push schema to DB without migration (dev only)
 - [ ] WhatsApp integration (share notes link)
 - [ ] Mobile app (React Native) using the same API
 
+### Future Architectural Improvements
+
+#### Direct S3 PDF Fetching via Signed URLs
+Currently, secure PDF streaming works as a proxy: `User -> Vercel -> Render API (Auth check + Proxy) -> S3 -> Render API -> User`. This means all heavy file traffic flows through the Render server's memory, which could become a significant bandwidth bottleneck at a high scale (e.g., 1000 users opening 200MB PDFs simultaneously).
+
+**Suggested Approach (When bandwidth costs/latency become an issue):**
+1. Instead of streaming bytes, `GET /api/notes/:id/stream` becomes `GET /api/notes/:id/signed-url`.
+2. The API performs the standard authentication and subscription check.
+3. If authorized, the API returns a short-lived (e.g., 15-minute) pre-signed URL for the S3 object (`{ url: "https://s3.amazonaws.com/...", expiresAt: "..." }`).
+4. `SecureViewer.tsx` fetches the PDF directly from this signed URL and caches it in IndexedDB as it currently does.
+
+**Pros:**
+- Completely offloads heavy bandwidth from the Render API to S3
+- Maintains strict authentication enforcement.
+
+**Security Trade-offs:**
+- The short-lived S3 URL becomes visible in the network tab and can technically be shared for the 15-minute window, slightly compromising the "zero local copy" strictness, though the risk is minimized by the short TTL and the existing local caching implementation.
+
 ---
 
 *End of documentation. For questions contact the development team.*
