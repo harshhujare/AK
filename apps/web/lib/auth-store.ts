@@ -22,8 +22,8 @@ const useAuthStore = create<AuthState>((set, get) => ({
 
   login: (accessToken: string, user: User) => {
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('accessToken', accessToken);
-      sessionStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('user', JSON.stringify(user));
     }
     set({ user, accessToken, isLoading: false });
   },
@@ -35,8 +35,8 @@ const useAuthStore = create<AuthState>((set, get) => ({
       // Ignore errors on logout — clear state regardless
     }
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('accessToken');
-      sessionStorage.removeItem('user');
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('user');
     }
     set({ user: null, accessToken: null });
   },
@@ -47,10 +47,10 @@ const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true });
 
     try {
-      // Restore from sessionStorage on page load
+      // Restore from localStorage on page load
       if (typeof window !== 'undefined') {
-        const storedToken = sessionStorage.getItem('accessToken');
-        const storedUser = sessionStorage.getItem('user');
+        const storedToken = localStorage.getItem('accessToken');
+        const storedUser = localStorage.getItem('user');
 
         if (storedToken && storedUser) {
           const user = JSON.parse(storedUser) as User;
@@ -60,7 +60,7 @@ const useAuthStore = create<AuthState>((set, get) => ({
           try {
             const { data } = await apiClient.get('/api/auth/me');
             set({ user: data.data, isLoading: false, isInitialized: true });
-            sessionStorage.setItem('user', JSON.stringify(data.data));
+            localStorage.setItem('user', JSON.stringify(data.data));
             return;
           } catch {
             // Token invalid — try refresh (interceptor handles it)
@@ -71,16 +71,16 @@ const useAuthStore = create<AuthState>((set, get) => ({
         try {
           const { data } = await apiClient.post('/api/auth/refresh');
           const newToken = data.data.accessToken;
-          sessionStorage.setItem('accessToken', newToken);
+          localStorage.setItem('accessToken', newToken);
 
           const meResponse = await apiClient.get('/api/auth/me');
           const user = meResponse.data.data as User;
-          sessionStorage.setItem('user', JSON.stringify(user));
+          localStorage.setItem('user', JSON.stringify(user));
           set({ user, accessToken: newToken });
         } catch {
           // No valid session — user needs to log in
-          sessionStorage.removeItem('accessToken');
-          sessionStorage.removeItem('user');
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('user');
           set({ user: null, accessToken: null });
         }
       }

@@ -5,6 +5,33 @@ import useEmblaCarousel from 'embla-carousel-react';
 import Autoplay from 'embla-carousel-autoplay';
 import type { Announcement } from '@ajitsir/shared';
 
+// ─── YouTube URL Parser ────────────────────────────────────────────────────────
+// Handles all YouTube URL formats:
+//   https://youtu.be/VIDEO_ID
+//   https://www.youtube.com/watch?v=VIDEO_ID
+//   https://www.youtube.com/watch?v=VIDEO_ID&feature=share
+//   https://www.youtube.com/shorts/VIDEO_ID
+//   https://www.youtube.com/embed/VIDEO_ID (passthrough)
+function extractYouTubeId(url: string): string | null {
+  const patterns = [
+    /youtu\.be\/([\w-]+)/,
+    /youtube\.com\/watch\?.*v=([\w-]+)/,
+    /youtube\.com\/shorts\/([\w-]+)/,
+    /youtube\.com\/embed\/([\w-]+)/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+  return null;
+}
+
+function buildEmbedUrl(youtubeUrl: string): string | null {
+  const id = extractYouTubeId(youtubeUrl);
+  if (!id) return null;
+  return `https://www.youtube.com/embed/${id}?rel=0&modestbranding=1`;
+}
+
 interface SliderProps {
   announcements: Announcement[];
 }
@@ -37,13 +64,23 @@ export default function Slider({ announcements }: SliderProps) {
             <div className="embla__slide" key={ann.id}>
               {ann.type === 'VIDEO' && ann.youtubeUrl ? (
                 <div className="slide-video-wrapper">
-                  <iframe
-                    src={ann.youtubeUrl.replace('watch?v=', 'embed/')}
-                    title={ann.title}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                    className="slide-iframe"
-                  />
+                  {buildEmbedUrl(ann.youtubeUrl) ? (
+                    <iframe
+                      src={buildEmbedUrl(ann.youtubeUrl)!}
+                      title={ann.title}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      className="slide-iframe"
+                      loading="lazy"
+                    />
+                  ) : (
+                    // Fallback for invalid / unrecognised YouTube URLs
+                    <div className="slide-content">
+                      <h2 className="slide-title font-serif">{ann.title}</h2>
+                      {ann.description && <p className="slide-desc">{ann.description}</p>}
+                      <p className="slide-desc" style={{ opacity: 0.5, fontSize: '0.8rem', marginTop: '0.5rem' }}>Video unavailable — invalid URL</p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="slide-content">

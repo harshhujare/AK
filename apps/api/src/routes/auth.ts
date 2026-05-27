@@ -11,8 +11,11 @@ export const authRouter = Router();
 const COOKIE_OPTS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
+  // 'none' is required when frontend (Vercel) and API are on different domains.
+  // 'lax' blocks cross-origin POST cookies (Chrome 80+, Safari), breaking token refresh.
+  // 'none' REQUIRES secure:true — only active in production (HTTPS).
+  sameSite: 'none' as const,
+  maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days — keeps users signed in
 };
 
 // POST /api/auth/register
