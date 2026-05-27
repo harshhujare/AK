@@ -13,22 +13,33 @@ export default function NewAnnouncementPage() {
   const [form, setForm] = useState({
     title: '',
     description: '',
-    type: 'TEXT' as 'TEXT' | 'VIDEO',
+    type: 'IMAGE' as 'IMAGE' | 'VIDEO',
     youtubeUrl: '',
     isActive: true,
     order: 0,
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useMutation({
-    mutationFn: () => apiClient.post('/api/announcements', {
-      title: form.title,
-      description: form.description || undefined,
-      type: form.type,
-      youtubeUrl: form.type === 'VIDEO' ? form.youtubeUrl : undefined,
-      isActive: form.isActive,
-      order: form.order,
-    }),
+    mutationFn: () => {
+      const formData = new FormData();
+      formData.append('title', form.title);
+      if (form.description) formData.append('description', form.description);
+      formData.append('type', form.type);
+      if (form.type === 'VIDEO' && form.youtubeUrl) {
+        formData.append('youtubeUrl', form.youtubeUrl);
+      }
+      formData.append('isActive', String(form.isActive));
+      formData.append('order', String(form.order));
+      if (form.type === 'IMAGE' && imageFile) {
+        formData.append('file', imageFile);
+      }
+      
+      return apiClient.post('/api/announcements', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-announcements'] });
       qc.invalidateQueries({ queryKey: ['announcements'] });
@@ -45,6 +56,9 @@ export default function NewAnnouncementPage() {
     if (!form.title.trim()) { setError('Title is required'); return; }
     if (form.type === 'VIDEO' && !form.youtubeUrl.trim()) {
       setError('YouTube URL is required for Video type'); return;
+    }
+    if (form.type === 'IMAGE' && !imageFile) {
+      setError('An image file is required for Image type'); return;
     }
     mutation.mutate();
   };
@@ -66,9 +80,9 @@ export default function NewAnnouncementPage() {
           <label className="form-label">Type</label>
           <div className="type-selector">
             <button type="button"
-              className={`type-btn ${form.type === 'TEXT' ? 'type-btn--active' : ''}`}
-              onClick={() => setForm(f => ({ ...f, type: 'TEXT' }))}>
-              📝 Text Announcement
+              className={`type-btn ${form.type === 'IMAGE' ? 'type-btn--active' : ''}`}
+              onClick={() => setForm(f => ({ ...f, type: 'IMAGE' }))}>
+              🖼️ Image Announcement
             </button>
             <button type="button"
               className={`type-btn ${form.type === 'VIDEO' ? 'type-btn--active' : ''}`}
@@ -98,6 +112,18 @@ export default function NewAnnouncementPage() {
             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
           />
         </div>
+
+        {form.type === 'IMAGE' && (
+          <div className="form-group">
+            <label className="form-label" htmlFor="ann-image">Image File *</label>
+            <input
+              id="ann-image" type="file" className="form-input file-input"
+              accept="image/jpeg, image/png, image/webp"
+              onChange={e => setImageFile(e.target.files?.[0] || null)}
+            />
+            <p className="form-hint">Recommended aspect ratio: 16:9 or 16:7. Max 5MB.</p>
+          </div>
+        )}
 
         {form.type === 'VIDEO' && (
           <div className="form-group">

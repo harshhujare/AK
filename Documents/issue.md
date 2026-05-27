@@ -18,3 +18,14 @@ and i think loading them on any device would be very bad metho so we have to fin
 1. when i am adding new anoumcesment of a new youtube video it adds up to the slider but its thumbnail is shows black and then i click on video An error occurred. Please try again later. (Playback ID: XIi2KC-rMkpER3ZB)
 Learn More 
 and this issue is only with new anoumcesment the old ones are running fine
+
+date of issue : 27-05-2026 
+
+improvemt in anowncement section 
+1. curruntly we do anouncement in 2 types 1 is text and second is youtube video 
+now we have to change text with image anouncement 
+admin can upload images for the anouncement also 
+2. curruntly the slider is running on 3 or 4 seconds but it dont have controlls to slide left or right manually 
+we have to add controls to slide left or right manually also 
+and for mobile device dont show controll buttuns they can wipe with fingers 
+3. 

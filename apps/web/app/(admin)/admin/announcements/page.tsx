@@ -9,7 +9,7 @@ interface Announcement {
   id: string;
   title: string;
   description: string | null;
-  type: 'TEXT' | 'VIDEO';
+  type: 'IMAGE' | 'VIDEO';
   youtubeUrl: string | null;
   isActive: boolean;
   order: number;
@@ -73,7 +73,7 @@ export default function AnnouncementsPage() {
               <div className="ann-info">
                 <div className="ann-row-top">
                   <span className={`type-badge ${ann.type === 'VIDEO' ? 'type-badge--video' : ''}`}>
-                    {ann.type === 'VIDEO' ? '▶ Video' : '📝 Text'}
+                    {ann.type === 'VIDEO' ? '▶ Video' : '🖼️ Image'}
                   </span>
                   <span className={`status-dot ${ann.isActive ? 'status-dot--active' : ''}`} />
                   <span className="ann-order">Order: {ann.order}</span>
