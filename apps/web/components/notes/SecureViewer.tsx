@@ -6,6 +6,7 @@ import WatermarkCanvas from './WatermarkCanvas';
 import type { NoteWithSubject } from '@/hooks/useNotes';
 import apiClient from '@/lib/api-client';
 import useAuthStore from '@/lib/auth-store';
+import { pdfCacheGet, pdfCacheSet } from '@/lib/pdf-cache';
 
 // Use local worker copy in /public (PDF.js v5 .mjs not on cdnjs yet)
 if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
@@ -24,60 +25,9 @@ type FetchState =
   | { stage: 'ready'; doc: pdfjsLib.PDFDocumentProxy; numPages: number }
   | { stage: 'error'; message: string };
 
-// ─── IndexedDB PDF Cache ───────────────────────────────────────────────────
-const DB_NAME = 'AjitSirPdfCache';
-const STORE_NAME = 'pdfs';
-
-async function initDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = () => {
-      request.result.createObjectStore(STORE_NAME);
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-async function getPdfFromCache(noteId: string, updatedAt: string): Promise<Uint8Array | null> {
-  try {
-    const db = await initDB();
-    return new Promise((resolve) => {
-      const transaction = db.transaction(STORE_NAME, 'readonly');
-      const store = transaction.objectStore(STORE_NAME);
-      const request = store.get(noteId);
-      request.onsuccess = () => {
-        const result = request.result;
-        if (result && result.updatedAt === updatedAt) {
-          resolve(result.data);
-        } else {
-          resolve(null);
-        }
-      };
-      request.onerror = () => resolve(null);
-    });
-  } catch {
-    return null;
-  }
-}
-
-async function savePdfToCache(noteId: string, data: Uint8Array, updatedAt: string): Promise<void> {
-  try {
-    const db = await initDB();
-    return new Promise((resolve) => {
-      const transaction = db.transaction(STORE_NAME, 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
-      const request = store.put({ data, updatedAt }, noteId);
-      request.onsuccess = () => resolve();
-      request.onerror = () => resolve();
-    });
-  } catch {
-    // ignore
-  }
-}
-
 export default function SecureViewer({ note, onClose }: SecureViewerProps) {
   const [fetchState, setFetchState] = useState<FetchState>({ stage: 'downloading', downloaded: 0, total: 0 });
+  const [fromCache, setFromCache] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -192,19 +142,22 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
 
       try {
         setFetchState({ stage: 'downloading', downloaded: 0, total: 0 });
+        setFromCache(false);
 
-        // Check IndexedDB cache first
-        const cachedData = await getPdfFromCache(note.id, note.updatedAt);
+        // ── 1. Check IndexedDB cache first ───────────────────────────────────
+        const cachedData = await pdfCacheGet(note.id, note.updatedAt);
         if (cachedData) {
           if (!isMounted) return;
           setFetchState({ stage: 'parsing' });
           const doc = await pdfjsLib.getDocument({ data: cachedData }).promise;
           if (!isMounted) { doc.destroy(); return; }
           pdfDoc = doc;
+          setFromCache(true);
           setFetchState({ stage: 'ready', doc, numPages: doc.numPages });
           return;
-         } 
+        }
 
+        // ── 2. Cache miss — stream from server ──────────────────────────────
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
         const fetchPdf = async (token: string | null) => {
           return fetch(`${apiUrl}/api/notes/${note.id}/stream`, {
@@ -245,7 +198,8 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
           if (!isMounted) { doc.destroy(); return; }
           pdfDoc = doc;
           setFetchState({ stage: 'ready', doc, numPages: doc.numPages });
-          savePdfToCache(note.id, new Uint8Array(buffer), note.updatedAt);
+          // 3. Save to cache (fire-and-forget)
+          pdfCacheSet(note.id, new Uint8Array(buffer), note.updatedAt);
           return;
         }
 
@@ -272,8 +226,8 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
           offset += chunk.byteLength;
         }
 
-        // Save to IndexedDB (fire-and-forget)
-        savePdfToCache(note.id, merged, note.updatedAt);
+        // ── 3. Save assembled bytes to cache (fire-and-forget) ─────────────
+        pdfCacheSet(note.id, merged, note.updatedAt);
 
         setFetchState({ stage: 'parsing' });
         const doc = await pdfjsLib.getDocument({ data: merged }).promise;
@@ -318,6 +272,11 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
           <span className="viewer-badge">{note.subject.name}</span>
           {fetchState.stage === 'ready' && (
             <span className="viewer-page-count">{currentPage} / {numPages}</span>
+          )}
+          {fromCache && fetchState.stage === 'ready' && (
+            <span className="viewer-cache-badge" title="Loaded from local cache">
+              ⚡ Instant
+            </span>
           )}
         </div>
 
@@ -502,6 +461,16 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
           border-radius: 4px;
           font-variant-numeric: tabular-nums;
           flex-shrink: 0;
+        }
+        .viewer-cache-badge {
+          background: rgba(250, 204, 21, 0.12);
+          color: #fbbf24;
+          font-size: 0.7rem;
+          font-weight: 600;
+          padding: 0.2rem 0.55rem;
+          border-radius: 4px;
+          flex-shrink: 0;
+          letter-spacing: 0.02em;
         }
         .viewer-close-btn {
           background: none;
