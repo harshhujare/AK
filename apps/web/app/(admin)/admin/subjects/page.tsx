@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Plus } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 
 interface Subject {
@@ -95,8 +96,8 @@ export default function SubjectsPage() {
           <h1 className="admin-page-title font-serif">Subjects</h1>
           <p className="admin-page-desc">Manage subject categories for notes.</p>
         </div>
-        <button className="btn-primary" onClick={() => setShowForm(!showForm)} id="add-subject-btn">
-          {showForm ? 'Cancel' : '+ Add Subject'}
+        <button className="btn-primary" onClick={() => setShowForm(!showForm)} id="add-subject-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+          {showForm ? 'Cancel' : <><Plus size={16} /> Add Subject</>}
         </button>
       </header>
 

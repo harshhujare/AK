@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
+import { Play, Image as ImageIcon, Plus } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 
 interface Announcement {
@@ -104,8 +105,8 @@ export default function AnnouncementsPage() {
           <h1 className="admin-page-title font-serif">Announcements</h1>
           <p className="admin-page-desc">Manage homepage slider content — text announcements and YouTube videos.</p>
         </div>
-        <Link href="/admin/announcements/new" className="btn-primary" id="new-announcement-btn">
-          + New Announcement
+        <Link href="/admin/announcements/new" className="btn-primary" id="new-announcement-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Plus size={16} /> New Announcement
         </Link>
       </header>
 
@@ -126,8 +127,8 @@ export default function AnnouncementsPage() {
             <div key={ann.id} className={`ann-row ${!ann.isActive ? 'ann-row--inactive' : ''}`}>
               <div className="ann-info">
                 <div className="ann-row-top">
-                  <span className={`type-badge ${ann.type === 'VIDEO' ? 'type-badge--video' : ''}`}>
-                    {ann.type === 'VIDEO' ? '▶ Video' : '🖼️ Image'}
+                  <span className={`type-badge ${ann.type === 'VIDEO' ? 'type-badge--video' : ''}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                    {ann.type === 'VIDEO' ? <><Play size={12} /> Video</> : <><ImageIcon size={12} /> Image</>}
                   </span>
                   <span className={`status-dot ${ann.isActive ? 'status-dot--active' : ''}`} />
                   <span className="ann-order">Order: {ann.order}</span>

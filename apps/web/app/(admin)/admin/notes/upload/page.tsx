@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { UploadCloud, FileText, ArrowLeft, Upload, X } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 
 interface Subject { id: string; name: string; }
@@ -166,7 +167,9 @@ export default function NoteUploadPage() {
     <div className="upload-page">
       <header className="admin-page-header">
         <div>
-          <Link href="/admin/notes" className="back-link">← Back to Notes</Link>
+          <Link href="/admin/notes" className="back-link" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+            <ArrowLeft size={14} /> Back to Notes
+          </Link>
           <h1 className="admin-page-title font-serif" style={{ marginTop: '0.5rem' }}>Upload Note</h1>
         </div>
       </header>
@@ -190,7 +193,7 @@ export default function NoteUploadPage() {
           />
           {file ? (
             <div className="drop-zone-filled">
-              <span className="file-icon">📄</span>
+              <span className="file-icon"><FileText size={32} /></span>
               <div>
                 <div className="file-name">{file.name}</div>
                 <div className="file-size">{(file.size / (1024 * 1024)).toFixed(2)} MB</div>
@@ -214,11 +217,13 @@ export default function NoteUploadPage() {
                   setThumbnailPreview(null);
                   setStage('idle');
                 }}
-              >✕</button>
+              >
+                <X size={14} />
+              </button>
             </div>
           ) : (
             <div className="drop-zone-prompt">
-              <span className="drop-icon">⬆</span>
+              <span className="drop-icon"><UploadCloud size={48} strokeWidth={1.5} /></span>
               <p className="drop-text">Drop a PDF here or <span className="drop-link">browse</span></p>
               <p className="drop-hint">PDF only · Max {MAX_FILE_MB} MB</p>
             </div>
@@ -311,14 +316,14 @@ export default function NoteUploadPage() {
 
         <div className="form-submit-row">
           <Link href="/admin/notes" className="btn-secondary">Cancel</Link>
-          <button type="submit" className="btn-primary" disabled={isPending}>
+          <button type="submit" className="btn-primary" disabled={isPending} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
             {stage === 'uploading'
               ? `Uploading ${uploadProgress}%…`
               : stage === 'saving'
               ? 'Saving…'
               : stage === 'preparing'
               ? 'Preparing…'
-              : '⬆ Upload to S3'}
+              : <><Upload size={16} /> Upload to S3</>}
           </button>
         </div>
       </form>

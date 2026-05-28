@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
+import { Upload } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 
 interface Subject { id: string; name: string; }
@@ -97,8 +98,8 @@ export default function NotesAdminPage() {
           <h1 className="admin-page-title font-serif">Notes</h1>
           <p className="admin-page-desc">All uploaded PDFs in the library.</p>
         </div>
-        <Link href="/admin/notes/upload" className="btn-primary" id="upload-note-btn">
-          ⬆ Upload Note
+        <Link href="/admin/notes/upload" className="btn-primary" id="upload-note-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Upload size={16} /> Upload Note
         </Link>
       </header>
 
