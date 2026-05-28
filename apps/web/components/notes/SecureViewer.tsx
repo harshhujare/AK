@@ -17,7 +17,7 @@ interface SecureViewerProps {
   onClose: () => void;
 }
 
-// ─── Fetch state machine ───────────────────────────────────────────────────────
+// ─── Fetch state machine 
 type FetchState =
   | { stage: 'downloading'; downloaded: number; total: number }
   | { stage: 'parsing' }
@@ -32,7 +32,7 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const { user, accessToken, isInitialized, setAccessToken } = useAuthStore();
 
-  // ─── Security blockers ─────────────────────────────────────────────────────
+  // ─── Security blockers 
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => e.preventDefault();
     const handleKeyDown = (e: KeyboardEvent) => {
