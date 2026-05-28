@@ -34,3 +34,7 @@ date:28-05-2026
 
 1. we have to improve the ux for pdf viewer 
 - in currunt pdf viewer user can zoom the pdf if he tries the whole page gets zoomed 
+- it should support text pdf and aslo scanned pdf without breaking 
+- if possible they should make the tab full screen 
+- they should rotate the pdf 
+-the username whatermark overlaps on eachother 

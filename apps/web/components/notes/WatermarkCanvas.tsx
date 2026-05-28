@@ -46,7 +46,9 @@ export default function WatermarkCanvas({ width, height }: WatermarkCanvasProps)
 
     // Mask email: j***@gmail.com
     const emailParts = user.email.split('@');
-    const maskedEmail = emailParts[0].charAt(0) + '***@' + emailParts[1];
+    const maskedEmail = emailParts.length === 2 
+      ? emailParts[0].charAt(0) + '***@' + emailParts[1]
+      : '***';
 
     const dateStr = new Date().toLocaleDateString('en-IN', {
       day: 'numeric',
@@ -62,16 +64,23 @@ export default function WatermarkCanvas({ width, height }: WatermarkCanvasProps)
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
+    // Measure text to prevent overlap
+    const metrics = ctx.measureText(watermarkText);
+    const textWidth = metrics.width;
+    
     // Draw watermark diagonally across the page repeatedly
-    const stepX = 400;
+    // Use dynamic spacing based on actual text width
+    const stepX = Math.max(textWidth + 80, 400); // At least 400px, or text + 80px gap
     const stepY = 280;
 
     ctx.save();
     ctx.rotate((-30 * Math.PI) / 180); // -30 degrees diagonal
 
     // Draw outside the literal bounds to cover full area after rotation
-    for (let x = -width; x < width * 2; x += stepX) {
-      for (let y = -height; y < height * 2; y += stepY) {
+    // We expand the rendering area to ensure corners are covered
+    const maxDimension = Math.max(width, height);
+    for (let x = -maxDimension * 1.5; x < maxDimension * 2.5; x += stepX) {
+      for (let y = -maxDimension * 1.5; y < maxDimension * 2.5; y += stepY) {
         ctx.fillText(watermarkText, x, y);
       }
     }
