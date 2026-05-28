@@ -18,7 +18,7 @@ export default function Navbar() {
 
 
 
-  // Scroll detection for backdrop
+   // Scroll detection for backdrop
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 10);
     window.addEventListener('scroll', handleScroll, { passive: true });
