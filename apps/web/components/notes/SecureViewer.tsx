@@ -24,6 +24,58 @@ type FetchState =
   | { stage: 'ready'; doc: pdfjsLib.PDFDocumentProxy; numPages: number }
   | { stage: 'error'; message: string };
 
+// ─── IndexedDB PDF Cache ───────────────────────────────────────────────────
+const DB_NAME = 'AjitSirPdfCache';
+const STORE_NAME = 'pdfs';
+
+async function initDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore(STORE_NAME);
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function getPdfFromCache(noteId: string, updatedAt: string): Promise<Uint8Array | null> {
+  try {
+    const db = await initDB();
+    return new Promise((resolve) => {
+      const transaction = db.transaction(STORE_NAME, 'readonly');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.get(noteId);
+      request.onsuccess = () => {
+        const result = request.result;
+        if (result && result.updatedAt === updatedAt) {
+          resolve(result.data);
+        } else {
+          resolve(null);
+        }
+      };
+      request.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function savePdfToCache(noteId: string, data: Uint8Array, updatedAt: string): Promise<void> {
+  try {
+    const db = await initDB();
+    return new Promise((resolve) => {
+      const transaction = db.transaction(STORE_NAME, 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.put({ data, updatedAt }, noteId);
+      request.onsuccess = () => resolve();
+      request.onerror = () => resolve();
+    });
+  } catch {
+    // ignore
+  }
+}
+
 export default function SecureViewer({ note, onClose }: SecureViewerProps) {
   const [fetchState, setFetchState] = useState<FetchState>({ stage: 'downloading', downloaded: 0, total: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -141,6 +193,18 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
       try {
         setFetchState({ stage: 'downloading', downloaded: 0, total: 0 });
 
+        // Check IndexedDB cache first
+        const cachedData = await getPdfFromCache(note.id, note.updatedAt);
+        if (cachedData) {
+          if (!isMounted) return;
+          setFetchState({ stage: 'parsing' });
+          const doc = await pdfjsLib.getDocument({ data: cachedData }).promise;
+          if (!isMounted) { doc.destroy(); return; }
+          pdfDoc = doc;
+          setFetchState({ stage: 'ready', doc, numPages: doc.numPages });
+          return;
+         } 
+
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
         const fetchPdf = async (token: string | null) => {
           return fetch(`${apiUrl}/api/notes/${note.id}/stream`, {
@@ -181,6 +245,7 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
           if (!isMounted) { doc.destroy(); return; }
           pdfDoc = doc;
           setFetchState({ stage: 'ready', doc, numPages: doc.numPages });
+          savePdfToCache(note.id, new Uint8Array(buffer), note.updatedAt);
           return;
         }
 
@@ -207,6 +272,9 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
           offset += chunk.byteLength;
         }
 
+        // Save to IndexedDB (fire-and-forget)
+        savePdfToCache(note.id, merged, note.updatedAt);
+
         setFetchState({ stage: 'parsing' });
         const doc = await pdfjsLib.getDocument({ data: merged }).promise;
         if (!isMounted) { doc.destroy(); return; }
@@ -226,7 +294,7 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
       isMounted = false;
       pdfDoc?.destroy();
     };
-  }, [note.id, user, accessToken, isInitialized, setAccessToken, retryNonce]);
+  }, [note.id, note.updatedAt, user, accessToken, isInitialized, setAccessToken, retryNonce]);
 
   // ─── Track current visible page ───────────────────────────────────────────
   const handlePageVisible = useCallback((pageNumber: number) => {
