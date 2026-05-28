@@ -35,6 +35,8 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
   
   // UX states
   const [scale, setScale] = useState(1);
+  const [transformOrigin, setTransformOrigin] = useState<string>('top center');
+  const zoomWrapperRef = useRef<HTMLDivElement>(null);
   const [rotation, setRotation] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   
@@ -104,6 +106,16 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
       );
       setInitialPinchDist(dist);
       setInitialScale(scale);
+
+      if (scale === 1 && zoomWrapperRef.current) {
+        const rect = zoomWrapperRef.current.getBoundingClientRect();
+        const clientX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const clientY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        
+        const originX = clientX - rect.left;
+        const originY = clientY - rect.top;
+        setTransformOrigin(`${originX}px ${originY}px`);
+      }
     }
   };
 
@@ -367,7 +379,11 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
 
         {/* ── Ready state — lazy page rendering ── */}
         {fetchState.stage === 'ready' && (
-          <div className="pdf-zoom-wrapper" style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}>
+          <div 
+            className="pdf-zoom-wrapper" 
+            style={{ transform: `scale(${scale})`, transformOrigin }}
+            ref={zoomWrapperRef}
+          >
             <div className="pdf-pages-container">
               {Array.from({ length: fetchState.numPages }, (_, i) => (
                 <LazyPdfPage
