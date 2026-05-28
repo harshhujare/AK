@@ -3,6 +3,7 @@ import { Playfair_Display, DM_Sans } from "next/font/google";
 import "./globals.css";
 import QueryProvider from "@/lib/query-provider";
 import Navbar from "@/components/layout/Navbar";
+import AuthProvider from "@/components/auth/AuthProvider";
 import { ThemeProvider } from "@/lib/theme";
 
 const playfair = Playfair_Display({
@@ -53,8 +54,10 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
           <QueryProvider>
-            <Navbar />
-            <div style={{ paddingTop: "64px" }}>{children}</div>
+            <AuthProvider>
+              <Navbar />
+              <div style={{ paddingTop: "64px" }}>{children}</div>
+            </AuthProvider>
           </QueryProvider>
         </ThemeProvider>
       </body>

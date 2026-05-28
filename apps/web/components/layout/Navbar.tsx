@@ -7,7 +7,7 @@ import useAuthStore from '@/lib/auth-store';
 import { useTheme } from '@/lib/theme';
 
 export default function Navbar() {
-  const { user, logout, initialize, isInitialized } = useAuthStore();
+  const { user, logout, isInitialized } = useAuthStore();
   const { theme, toggle } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -16,10 +16,7 @@ export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Initialize auth on mount
-  useEffect(() => {
-    if (!isInitialized) initialize();
-  }, [initialize, isInitialized]);
+
 
   // Scroll detection for backdrop
   useEffect(() => {
@@ -101,7 +98,12 @@ export default function Navbar() {
               )}
             </button>
 
-            {user ? (
+            {!isInitialized ? (
+              <div className="navbar-auth-skeleton" aria-hidden="true">
+                <div className="skeleton-avatar" />
+                <div className="skeleton-text" />
+              </div>
+            ) : user ? (
               <div className="navbar-user" ref={dropdownRef}>
                 <button
                   id="user-menu-button"
@@ -181,7 +183,18 @@ export default function Navbar() {
             </nav>
 
             <div className="mobile-menu-footer">
-              {user ? (
+              {!isInitialized ? (
+                <>
+                  <div className="mobile-menu-auth-skeleton">
+                    <div className="skeleton-avatar-lg" />
+                    <div>
+                      <div className="skeleton-text" style={{ width: '120px', marginBottom: '8px' }} />
+                      <div className="skeleton-text" style={{ width: '160px', height: '12px' }} />
+                    </div>
+                  </div>
+                  <div className="skeleton-button" />
+                </>
+              ) : user ? (
                 <>
                   <div className="mobile-menu-user">
                     <span className="navbar-avatar navbar-avatar--lg">{getInitials(user.name)}</span>
@@ -611,6 +624,60 @@ export default function Navbar() {
         .mobile-menu-action-btn--danger:hover {
           background: var(--danger-bg);
           color: var(--danger-text);
+        }
+
+        /* Skeletons */
+        @keyframes pulse {
+          0% { opacity: 0.6; }
+          50% { opacity: 0.3; }
+          100% { opacity: 0.6; }
+        }
+
+        .navbar-auth-skeleton {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.35rem 0.75rem 0.35rem 0.4rem;
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          animation: pulse 1.5s infinite ease-in-out;
+        }
+
+        .skeleton-avatar {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: var(--border-strong);
+        }
+
+        .skeleton-text {
+          width: 60px;
+          height: 14px;
+          border-radius: 4px;
+          background: var(--border-strong);
+        }
+
+        .mobile-menu-auth-skeleton {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding-bottom: 0.5rem;
+          animation: pulse 1.5s infinite ease-in-out;
+        }
+
+        .skeleton-avatar-lg {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background: var(--border-strong);
+        }
+
+        .skeleton-button {
+          height: 44px;
+          width: 100%;
+          border-radius: 10px;
+          background: var(--border-strong);
+          animation: pulse 1.5s infinite ease-in-out;
         }
       `}</style>
     </>
