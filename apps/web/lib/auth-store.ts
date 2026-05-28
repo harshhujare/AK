@@ -13,6 +13,7 @@ interface AuthState {
   login: (accessToken: string, user: User) => void;
   logout: () => Promise<void>;
   initialize: () => Promise<void>;
+  setAccessToken: (accessToken: string) => void;
 }
 
 const useAuthStore = create<AuthState>((set, get) => ({
@@ -27,6 +28,13 @@ const useAuthStore = create<AuthState>((set, get) => ({
       localStorage.setItem('user', JSON.stringify(user));
     }
     set({ user, accessToken, isLoading: false });
+  },
+
+  setAccessToken: (accessToken: string) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('accessToken', accessToken);
+    }
+    set({ accessToken });
   },
 
   logout: async () => {

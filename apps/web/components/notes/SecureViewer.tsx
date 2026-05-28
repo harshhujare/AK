@@ -4,7 +4,8 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import WatermarkCanvas from './WatermarkCanvas';
 import type { NoteWithSubject } from '@/hooks/useNotes';
-import pdfCache from '@/lib/pdf-cache';
+import apiClient from '@/lib/api-client';
+import useAuthStore from '@/lib/auth-store';
 
 // Use local worker copy in /public (PDF.js v5 .mjs not on cdnjs yet)
 if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
@@ -16,7 +17,7 @@ interface SecureViewerProps {
   onClose: () => void;
 }
 
-// ─── Fetch state machine ───────────────────────────────────────────────────────
+// ─── Fetch state machine 
 type FetchState =
   | { stage: 'downloading'; downloaded: number; total: number }
   | { stage: 'parsing' }
@@ -27,9 +28,11 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
   const [fetchState, setFetchState] = useState<FetchState>({ stage: 'downloading', downloaded: 0, total: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [retryNonce, setRetryNonce] = useState(0);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const { user, accessToken, isInitialized, setAccessToken } = useAuthStore();
 
-  // ─── Security blockers ─────────────────────────────────────────────────────
+  // ─── Security blockers 
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => e.preventDefault();
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -46,35 +49,43 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
     };
   }, []);
 
-  // ─── Streaming fetch + PDF parse (cache-first) ────────────────────────────
+  // ─── Streaming fetch + PDF parse ───────────────────────────────────────────
   useEffect(() => {
     let isMounted = true;
     let pdfDoc: pdfjsLib.PDFDocumentProxy | null = null;
 
     async function loadPdf() {
+      if (!isInitialized) {
+        setFetchState({ stage: 'downloading', downloaded: 0, total: 0 });
+        return;
+      }
+
+      if (!user) {
+        setFetchState({ stage: 'error', message: 'Please log in to view this document.' });
+        return;
+      }
+
       try {
-        // ── 1. Check IndexedDB cache first ──────────────────────────────────
-        const cached = await pdfCache.get(note.id);
-
-        if (cached && isMounted) {
-          // Cache hit — skip the entire download, go straight to parsing
-          setFetchState({ stage: 'parsing' });
-          const doc = await pdfjsLib.getDocument({ data: cached }).promise;
-          if (!isMounted) { doc.destroy(); return; }
-          pdfDoc = doc;
-          setFetchState({ stage: 'ready', doc, numPages: doc.numPages });
-          return;
-        }
-
-        // ── 2. Cache miss — stream from server ─────────────────────────────
         setFetchState({ stage: 'downloading', downloaded: 0, total: 0 });
 
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-        const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+        const fetchPdf = async (token: string | null) => {
+          return fetch(`${apiUrl}/api/notes/${note.id}/stream`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            credentials: 'include',
+          });
+        };
 
-        const response = await fetch(`${apiUrl}/api/notes/${note.id}/stream`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
+        let token = accessToken;
+        let response = await fetchPdf(token);
+
+        if (response.status === 401 && typeof window !== 'undefined') {
+          const { data } = await apiClient.post('/api/auth/refresh');
+          const refreshedToken = data.data.accessToken as string;
+          token = refreshedToken;
+          setAccessToken(refreshedToken);
+          response = await fetchPdf(refreshedToken);
+        }
 
         if (!response.ok) {
           const msg =
@@ -92,11 +103,8 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
           // Fallback: no streaming support (older browsers)
           const buffer = await response.arrayBuffer();
           if (!isMounted) return;
-          const merged = new Uint8Array(buffer);
-          // Save to cache for next open (fire-and-forget)
-          void pdfCache.set(note.id, merged);
           setFetchState({ stage: 'parsing' });
-          const doc = await pdfjsLib.getDocument({ data: merged }).promise;
+          const doc = await pdfjsLib.getDocument({ data: buffer }).promise;
           if (!isMounted) { doc.destroy(); return; }
           pdfDoc = doc;
           setFetchState({ stage: 'ready', doc, numPages: doc.numPages });
@@ -126,9 +134,6 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
           offset += chunk.byteLength;
         }
 
-        // ── 3. Save to IndexedDB for future opens (fire-and-forget) ─────────
-        void pdfCache.set(note.id, merged);
-
         setFetchState({ stage: 'parsing' });
         const doc = await pdfjsLib.getDocument({ data: merged }).promise;
         if (!isMounted) { doc.destroy(); return; }
@@ -148,7 +153,7 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
       isMounted = false;
       pdfDoc?.destroy();
     };
-  }, [note.id]);
+  }, [note.id, user, accessToken, isInitialized, setAccessToken, retryNonce]);
 
   // ─── Track current visible page ───────────────────────────────────────────
   const handlePageVisible = useCallback((pageNumber: number) => {
@@ -224,7 +229,7 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
               <line x1="12" y1="16" x2="12.01" y2="16"></line>
             </svg>
             <p>{fetchState.message}</p>
-            <button className="btn-retry" onClick={() => window.location.reload()}>Retry</button>
+            <button className="btn-retry" onClick={() => setRetryNonce((value) => value + 1)}>Retry</button>
           </div>
         )}
 

@@ -27,7 +27,7 @@
 3. API verifies with Google, upserts user, issues:
    - **Access token** (JWT, 15 min) → returned in response body
    - **Refresh token** (JWT, 7 days) → set as httpOnly cookie
-4. Access token stored in `sessionStorage` (not localStorage)
+4. Access token stored in `localStorage`
 5. Axios interceptor injects `Authorization: Bearer <token>` on every request
 6. On 401, interceptor calls `POST /api/auth/refresh` (uses cookie) → retries original
 
@@ -41,7 +41,7 @@
 ```
 
 ### Tokens
-- **Access token:** 15-minute TTL (configurable via `JWT_EXPIRES_IN`). Stored in `sessionStorage` (cleared on tab close).
+- **Access token:** 15-minute TTL (configurable via `JWT_EXPIRES_IN`). Stored in `localStorage`.
 - **Refresh token:** 7-day TTL, stored as `httpOnly` cookie. Prevents JavaScript access (XSS protection).
 
 ---
@@ -60,6 +60,9 @@ requireSuperAdmin()    // SUPER_ADMIN only
 
 The frontend uses Zustand for authentication state (`apps/web/lib/auth-store.ts`).
 
+### Global Auth Provider
+Authentication initialization is handled globally by `AuthProvider` (`apps/web/components/auth/AuthProvider.tsx`), which wraps the application in `layout.tsx`. It ensures `initialize()` runs exactly once when the application mounts. The UI reacts to the `isInitialized` state to show skeleton loaders while the session is being restored.
+
 ### State: `useAuthStore`
 
 ```typescript
@@ -67,9 +70,9 @@ The frontend uses Zustand for authentication state (`apps/web/lib/auth-store.ts`
   user: User | null,
   accessToken: string | null,
   isLoading: boolean,
-  isInitialized: boolean,
+  isInitialized: boolean,       // Used by Navbar/UI to render skeletons during initial load
   login(accessToken, user): void,
   logout(): Promise<void>,
-  initialize(): Promise<void>   // Called on page load, restores from sessionStorage
+  initialize(): Promise<void>   // Restores session from localStorage or refresh cookie
 }
 ```
