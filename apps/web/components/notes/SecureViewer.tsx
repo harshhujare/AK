@@ -27,8 +27,15 @@ type FetchState =
 export default function SecureViewer({ note, onClose }: SecureViewerProps) {
   const [fetchState, setFetchState] = useState<FetchState>({ stage: 'downloading', downloaded: 0, total: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+  const viewerRef = useRef<HTMLDivElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [retryNonce, setRetryNonce] = useState(0);
+  
+  // UX states
+  const [scale, setScale] = useState(1);
+  const [rotation, setRotation] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const { user, accessToken, isInitialized, setAccessToken } = useAuthStore();
 
@@ -48,6 +55,72 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
+
+  // ─── Native Fullscreen & Scroll Lock ───────────────────────────────────────
+  useEffect(() => {
+    // Lock body scroll and native pinch zoom
+    const originalTouchAction = document.documentElement.style.touchAction;
+    const originalOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.touchAction = 'none';
+    document.documentElement.style.overflow = 'hidden';
+    
+    // Listen for fullscreen exits (e.g., via ESC key)
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+
+    return () => {
+      document.documentElement.style.touchAction = originalTouchAction;
+      document.documentElement.style.overflow = originalOverflow;
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      
+      // Ensure we exit fullscreen if unmounted
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      viewerRef.current?.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  };
+
+  // ─── Touch Pinch Zoom Handling ─────────────────────────────────────────────
+  const [initialPinchDist, setInitialPinchDist] = useState<number | null>(null);
+  const [initialScale, setInitialScale] = useState(1);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      setInitialPinchDist(dist);
+      setInitialScale(scale);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && initialPinchDist !== null) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const newScale = Math.min(Math.max(initialScale * (dist / initialPinchDist), 0.5), 3.0);
+      setScale(newScale);
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length < 2) {
+      setInitialPinchDist(null);
+    }
+  };
 
   // ─── Streaming fetch + PDF parse ───────────────────────────────────────────
   useEffect(() => {
@@ -163,7 +236,13 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
   const numPages = fetchState.stage === 'ready' ? fetchState.numPages : 0;
 
   return (
-    <div className="secure-viewer-overlay" role="dialog" aria-modal="true" aria-label={`Viewing ${note.title}`}>
+    <div 
+      className="secure-viewer-overlay" 
+      role="dialog" 
+      aria-modal="true" 
+      aria-label={`Viewing ${note.title}`}
+      ref={viewerRef}
+    >
       {/* Header */}
       <header className="viewer-header">
         <div className="viewer-title-group">
@@ -173,6 +252,25 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
             <span className="viewer-page-count">{currentPage} / {numPages}</span>
           )}
         </div>
+
+        {/* Desktop Controls */}
+        <div className="viewer-controls hidden-mobile">
+          <button className="control-btn" onClick={() => setScale(s => Math.max(0.5, s - 0.25))} aria-label="Zoom out">−</button>
+          <span className="control-text">{Math.round(scale * 100)}%</span>
+          <button className="control-btn" onClick={() => setScale(s => Math.min(3, s + 0.25))} aria-label="Zoom in">+</button>
+          <div className="control-divider" />
+          <button className="control-btn" onClick={() => setRotation(r => (r - 90 + 360) % 360)} aria-label="Rotate left">
+            ↺
+          </button>
+          <button className="control-btn" onClick={() => setRotation(r => (r + 90) % 360)} aria-label="Rotate right">
+            ↻
+          </button>
+          <div className="control-divider" />
+          <button className="control-btn" onClick={toggleFullscreen} aria-label="Toggle fullscreen">
+            {isFullscreen ? '⤓' : '⤢'}
+          </button>
+        </div>
+
         <button className="viewer-close-btn" onClick={onClose} aria-label="Close viewer">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -182,7 +280,14 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
       </header>
 
       {/* Content */}
-      <main className="viewer-content" ref={containerRef}>
+      <main 
+        className="viewer-content" 
+        ref={containerRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+      >
         {/* ── Downloading state ── */}
         {fetchState.stage === 'downloading' && (
           <div className="viewer-center-msg">
@@ -235,19 +340,37 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
 
         {/* ── Ready state — lazy page rendering ── */}
         {fetchState.stage === 'ready' && (
-          <div className="pdf-pages-container">
-            {Array.from({ length: fetchState.numPages }, (_, i) => (
-              <LazyPdfPage
-                key={i + 1}
-                pageNumber={i + 1}
-                pdfDoc={fetchState.doc}
-                onVisible={handlePageVisible}
-                ref={(el) => { pageRefs.current[i] = el; }}
-              />
-            ))}
+          <div className="pdf-zoom-wrapper" style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}>
+            <div className="pdf-pages-container">
+              {Array.from({ length: fetchState.numPages }, (_, i) => (
+                <LazyPdfPage
+                  key={i + 1}
+                  pageNumber={i + 1}
+                  pdfDoc={fetchState.doc}
+                  rotation={rotation}
+                  onVisible={handlePageVisible}
+                  ref={(el) => { pageRefs.current[i] = el; }}
+                />
+              ))}
+            </div>
           </div>
         )}
       </main>
+
+      {/* Mobile Floating Pill Controls */}
+      <div className="mobile-floating-pill visible-mobile">
+        <button className="control-btn" onClick={() => setRotation(r => (r - 90 + 360) % 360)} aria-label="Rotate left">
+          ↺
+        </button>
+        <div className="control-divider" />
+        <button className="control-btn" onClick={() => setRotation(r => (r + 90) % 360)} aria-label="Rotate right">
+          ↻
+        </button>
+        <div className="control-divider" />
+        <button className="control-btn" onClick={toggleFullscreen} aria-label="Toggle fullscreen">
+          {isFullscreen ? '⤓' : '⤢'}
+        </button>
+      </div>
 
       {/* Security CSS */}
       <style>{`
@@ -326,6 +449,69 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
           background: rgba(255,255,255,0.1);
           color: white;
         }
+
+        .viewer-controls {
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
+          background: rgba(255,255,255,0.05);
+          padding: 0.35rem 0.5rem;
+          border-radius: 8px;
+        }
+        .control-btn {
+          background: none;
+          border: none;
+          color: rgba(255,255,255,0.7);
+          cursor: pointer;
+          width: 32px;
+          height: 32px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 6px;
+          font-size: 1.1rem;
+          transition: background 0.2s, color 0.2s;
+        }
+        .control-btn:hover {
+          background: rgba(255,255,255,0.15);
+          color: white;
+        }
+        .control-text {
+          color: white;
+          font-size: 0.8rem;
+          font-variant-numeric: tabular-nums;
+          width: 44px;
+          text-align: center;
+        }
+        .control-divider {
+          width: 1px;
+          height: 20px;
+          background: rgba(255,255,255,0.2);
+          margin: 0 0.25rem;
+        }
+        .mobile-floating-pill {
+          position: absolute;
+          bottom: 2rem;
+          left: 50%;
+          transform: translateX(-50%);
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
+          background: rgba(20,20,20,0.85);
+          backdrop-filter: blur(10px);
+          padding: 0.35rem 0.5rem;
+          border-radius: 100px;
+          border: 1px solid rgba(255,255,255,0.1);
+          box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+          z-index: 100;
+        }
+        .visible-mobile { display: none; }
+        
+        .pdf-zoom-wrapper {
+          width: 100%;
+          transition: transform 0.1s ease-out;
+        }
+
         .viewer-content {
           flex: 1;
           overflow-y: auto;
@@ -433,6 +619,8 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
         }
 
         @media (max-width: 768px) {
+          .hidden-mobile { display: none; }
+          .visible-mobile { display: flex; }
           .viewer-content { padding: 0.75rem; }
           .pdf-pages-container { gap: 0.75rem; }
           .viewer-title { max-width: 120px; font-size: 0.95rem; }
@@ -451,11 +639,12 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
 interface LazyPdfPageProps {
   pageNumber: number;
   pdfDoc: pdfjsLib.PDFDocumentProxy;
+  rotation: number;
   onVisible: (pageNumber: number) => void;
 }
 
 const LazyPdfPage = React.forwardRef<HTMLDivElement, LazyPdfPageProps>(
-  function LazyPdfPage({ pageNumber, pdfDoc, onVisible }, ref) {
+  function LazyPdfPage({ pageNumber, pdfDoc, rotation, onVisible }, ref) {
     const wrapperRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [rendered, setRendered] = useState(false);
@@ -473,7 +662,7 @@ const LazyPdfPage = React.forwardRef<HTMLDivElement, LazyPdfPageProps>(
       async function calcDimensions() {
         try {
           const page = await pdfDoc.getPage(pageNumber);
-          const viewport = page.getViewport({ scale: 1 });
+          const viewport = page.getViewport({ scale: 1, rotation });
           const containerWidth = Math.min(window.innerWidth - (window.innerWidth <= 768 ? 24 : 64), 1000);
           // Cap DPR at 2.0 — DPR 3 triples memory with no visible gain on small screens
           const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -485,7 +674,7 @@ const LazyPdfPage = React.forwardRef<HTMLDivElement, LazyPdfPageProps>(
         }
       }
       calcDimensions();
-    }, [pdfDoc, pageNumber]);
+    }, [pdfDoc, pageNumber, rotation]);
 
     // IntersectionObserver — render when close to viewport, destroy when far away
     useEffect(() => {
@@ -535,9 +724,9 @@ const LazyPdfPage = React.forwardRef<HTMLDivElement, LazyPdfPageProps>(
             1000
           );
           const dpr = Math.min(window.devicePixelRatio || 1, 2);
-          const viewportUnscaled = page.getViewport({ scale: 1 });
+          const viewportUnscaled = page.getViewport({ scale: 1, rotation });
           const scale = containerWidth / viewportUnscaled.width;
-          const viewport = page.getViewport({ scale });
+          const viewport = page.getViewport({ scale, rotation });
 
           // Physical pixels (canvas attribute) — setting canvas.width resets the 2D context
           canvas.width = Math.floor(viewport.width * dpr);
@@ -583,7 +772,7 @@ const LazyPdfPage = React.forwardRef<HTMLDivElement, LazyPdfPageProps>(
         isMounted = false;
         renderTask?.cancel();
       };
-    }, [rendered, pageNumber, pdfDoc]);
+    }, [rendered, pageNumber, pdfDoc, rotation]);
 
     return (
       <div
