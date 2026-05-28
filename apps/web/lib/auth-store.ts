@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { User } from '@ajitsir/shared';
 import apiClient from './api-client';
-import pdfCache from './pdf-cache';
+import { pdfCacheClearAll } from './pdf-cache';
 
 interface AuthState {
   user: User | null;
@@ -43,12 +43,12 @@ const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       // Ignore errors on logout — clear state regardless
     }
+    // Wipe cached PDFs — critical for shared/school computers
+    await pdfCacheClearAll();
     if (typeof window !== 'undefined') {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('user');
     }
-    // Clear all cached PDFs so other users on shared devices cannot access them
-    void pdfCache.clearAll();
     set({ user: null, accessToken: null });
   },
 

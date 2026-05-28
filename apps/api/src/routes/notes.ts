@@ -60,6 +60,8 @@ notesRouter.get('/:id/stream', requireAuth(), asyncHandler(async (req: Request, 
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Cache-Control', 'private, no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
+  // ETag lets the client detect if the admin has re-uploaded this note
+  res.setHeader('ETag', `"note-${note.id}-${note.updatedAt.getTime()}"`);
   if (s3Object.ContentLength) {
     res.setHeader('Content-Length', s3Object.ContentLength);
   }

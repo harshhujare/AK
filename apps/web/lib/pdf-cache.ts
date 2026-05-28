@@ -1,219 +1,194 @@
-/**
- * pdf-cache.ts
- *
- * IndexedDB-backed cache for PDF binaries.
- * - TTL: 30 days from last read
- * - Storage cap: 600 MB (LRU eviction when exceeded)
- * - Completely transparent: any IndexedDB error silently falls back to a fresh download
- */
+'use client';
+
+// ─── IndexedDB PDF Cache ────────────────────────────────────────────────────
+// Stores raw PDF bytes keyed by noteId.
+// Schema per entry:
+//   { noteId(keyPath), data: Uint8Array, updatedAt: string, sizeBytes: number, lastRead: number }
+//
+// Eviction policy:
+//   - No TTL — cache persists until the user logs out.
+//   - Storage cap: 600 MB. Evicts least-recently-used entries when exceeded.
+//
+// Security note:
+//   Raw bytes live on disk in the user's IndexedDB. A DevTools-savvy user
+//   could extract them. Watermarks are still applied at render time.
+//   This mirrors how Scribd / Coursera handle premium content caching.
 
 const DB_NAME = 'AjitSirPdfCache';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // bump from 1 → 2 to trigger onupgradeneeded with new schema
 const STORE_NAME = 'pdfs';
+const STORAGE_CAP_BYTES = 600 * 1024 * 1024; // 600 MB
 
-/** 30 days in milliseconds */
-const TTL_MS = 30 * 24 * 60 * 60 * 1000;
-
-/** 600 MB in bytes */
-const MAX_BYTES = 600 * 1024 * 1024;
-
-interface CacheEntry {
-  noteId: string;
-  data: Uint8Array;
-  cachedAt: number;
-  lastRead: number;
-  sizeBytes: number;
-}
-
-// ─── Singleton DB connection ───────────────────────────────────────────────────
-
-let _dbPromise: Promise<IDBDatabase> | null = null;
-
-function openDb(): Promise<IDBDatabase> {
-  if (_dbPromise) return _dbPromise;
-
-  _dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
+// ─── Open / upgrade DB ────────────────────────────────────────────────────────
+function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: 'noteId' });
-        store.createIndex('lastRead', 'lastRead', { unique: false });
+
+      // Drop old store if it exists (migration from v1)
+      if (db.objectStoreNames.contains(STORE_NAME)) {
+        db.deleteObjectStore(STORE_NAME);
       }
+
+      // Create with keyPath so IDB manages the primary key
+      const store = db.createObjectStore(STORE_NAME, { keyPath: 'noteId' });
+      // Index for LRU eviction — sort by lastRead ascending
+      store.createIndex('lastRead', 'lastRead', { unique: false });
     };
 
-    request.onsuccess = (event) => resolve((event.target as IDBOpenDBRequest).result);
-    request.onerror  = (event) => reject((event.target as IDBOpenDBRequest).error);
-  });
-
-  return _dbPromise;
-}
-
-// ─── Helpers ───────────────────────────────────────────────────────────────────
-
-function idbGet(db: IDBDatabase, noteId: string): Promise<CacheEntry | undefined> {
-  return new Promise((resolve, reject) => {
-    const tx    = db.transaction(STORE_NAME, 'readonly');
-    const store = tx.objectStore(STORE_NAME);
-    const req   = store.get(noteId);
-    req.onsuccess = () => resolve(req.result as CacheEntry | undefined);
-    req.onerror   = () => reject(req.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
   });
 }
 
-function idbPut(db: IDBDatabase, entry: CacheEntry): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const tx    = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    const req   = store.put(entry);
-    req.onsuccess = () => resolve();
-    req.onerror   = () => reject(req.error);
-  });
-}
+// ─── Public API ───────────────────────────────────────────────────────────────
 
-function idbDelete(db: IDBDatabase, noteId: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const tx    = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    const req   = store.delete(noteId);
-    req.onsuccess = () => resolve();
-    req.onerror   = () => reject(req.error);
-  });
-}
+/**
+ * Returns cached PDF bytes if present and matching updatedAt, otherwise null.
+ * Also updates `lastRead` timestamp (LRU bookkeeping).
+ */
+export async function pdfCacheGet(noteId: string, updatedAt: string): Promise<Uint8Array | null> {
+  try {
+    const db = await openDB();
+    const entry = await idbGet<PdfCacheEntry>(db, noteId);
 
-function idbGetAll(db: IDBDatabase): Promise<CacheEntry[]> {
-  return new Promise((resolve, reject) => {
-    const tx    = db.transaction(STORE_NAME, 'readonly');
-    const store = tx.objectStore(STORE_NAME);
-    const req   = store.getAll();
-    req.onsuccess = () => resolve(req.result as CacheEntry[]);
-    req.onerror   = () => reject(req.error);
-  });
-}
+    if (!entry) return null;
 
-function idbClearAll(db: IDBDatabase): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const tx    = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    const req   = store.clear();
-    req.onsuccess = () => resolve();
-    req.onerror   = () => reject(req.error);
-  });
-}
-
-// ─── Eviction — remove expired entries first, then LRU until under cap ────────
-
-async function evict(db: IDBDatabase, incomingSizeBytes: number): Promise<void> {
-  const now     = Date.now();
-  let   entries = await idbGetAll(db);
-
-  // 1. Delete expired entries (older than TTL from last read)
-  const expired = entries.filter((e) => now - e.lastRead > TTL_MS);
-  for (const e of expired) {
-    await idbDelete(db, e.noteId);
-  }
-
-  // Re-read remaining after deletions
-  entries = await idbGetAll(db);
-
-  // 2. If still over cap, evict LRU (sort by lastRead ascending = oldest first)
-  let totalUsed = entries.reduce((sum, e) => sum + e.sizeBytes, 0);
-  if (totalUsed + incomingSizeBytes <= MAX_BYTES) return;
-
-  entries.sort((a, b) => a.lastRead - b.lastRead);
-  for (const e of entries) {
-    if (totalUsed + incomingSizeBytes <= MAX_BYTES) break;
-    await idbDelete(db, e.noteId);
-    totalUsed -= e.sizeBytes;
-  }
-}
-
-// ─── Public API ────────────────────────────────────────────────────────────────
-
-const pdfCache = {
-  /**
-   * Returns cached PDF bytes for a note, or null on a cache miss / expired entry.
-   * Also silently updates `lastRead` to keep the entry alive.
-   */
-  async get(noteId: string): Promise<Uint8Array | null> {
-    if (typeof window === 'undefined') return null;
-    try {
-      const db    = await openDb();
-      const entry = await idbGet(db, noteId);
-
-      if (!entry) return null;
-
-      // Check TTL
-      if (Date.now() - entry.lastRead > TTL_MS) {
-        await idbDelete(db, noteId);
-        return null;
-      }
-
-      // Refresh lastRead so actively used entries don't expire
-      await idbPut(db, { ...entry, lastRead: Date.now() });
-
-      return entry.data;
-    } catch {
-      // IndexedDB unavailable (private mode, storage quota denied, etc.) — silent fallback
+    // Invalidate if the note was updated since we cached it
+    if (entry.updatedAt !== updatedAt) {
+      // Async delete stale entry — fire-and-forget
+      idbDelete(db, noteId).catch(() => {});
       return null;
     }
-  },
 
-  /**
-   * Stores PDF bytes in IndexedDB.
-   * Runs eviction first to respect the 600 MB cap.
-   */
-  async set(noteId: string, data: Uint8Array): Promise<void> {
-    if (typeof window === 'undefined') return;
-    try {
-      const db   = await openDb();
-      const now  = Date.now();
+    // Update lastRead (LRU bookkeeping) — fire-and-forget
+    idbPut(db, { ...entry, lastRead: Date.now() }).catch(() => {});
 
-      // Don't cache files that would individually exceed the cap
-      if (data.byteLength > MAX_BYTES) return;
+    return entry.data;
+  } catch {
+    return null;
+  }
+}
 
-      await evict(db, data.byteLength);
+/**
+ * Stores PDF bytes in IndexedDB.
+ * Evicts least-recently-used entries if total size would exceed 600 MB.
+ */
+export async function pdfCacheSet(noteId: string, data: Uint8Array, updatedAt: string): Promise<void> {
+  try {
+    const db = await openDB();
+    const sizeBytes = data.byteLength;
 
-      const entry: CacheEntry = {
-        noteId,
-        data,
-        cachedAt:  now,
-        lastRead:  now,
-        sizeBytes: data.byteLength,
-      };
+    // Evict LRU entries until we have room
+    await evictIfNeeded(db, sizeBytes);
 
-      await idbPut(db, entry);
-    } catch {
-      // Eviction or write failure — silently ignore
-    }
-  },
+    const entry: PdfCacheEntry = {
+      noteId,
+      data,
+      updatedAt,
+      sizeBytes,
+      lastRead: Date.now(),
+    };
 
-  /**
-   * Force-removes a specific note from cache (e.g. after admin re-uploads).
-   */
-  async invalidate(noteId: string): Promise<void> {
-    if (typeof window === 'undefined') return;
-    try {
-      const db = await openDb();
-      await idbDelete(db, noteId);
-    } catch {
-      // Ignore
-    }
-  },
+    await idbPut(db, entry);
+  } catch {
+    // Storage full or IDB unavailable — silently continue without caching
+  }
+}
 
-  /**
-   * Wipes all cached PDFs — called on logout to protect shared devices.
-   */
-  async clearAll(): Promise<void> {
-    if (typeof window === 'undefined') return;
-    try {
-      const db = await openDb();
-      await idbClearAll(db);
-    } catch {
-      // Ignore
-    }
-  },
-};
+/**
+ * Removes a single note's cache entry (e.g., after admin re-upload).
+ */
+export async function pdfCacheInvalidate(noteId: string): Promise<void> {
+  try {
+    const db = await openDB();
+    await idbDelete(db, noteId);
+  } catch {
+    // ignore
+  }
+}
 
-export default pdfCache;
+/**
+ * Wipes ALL cached PDFs. Called on logout to protect shared devices.
+ */
+export async function pdfCacheClearAll(): Promise<void> {
+  try {
+    const db = await openDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const request = tx.objectStore(STORE_NAME).clear();
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  } catch {
+    // ignore
+  }
+}
+
+// ─── Internal types ───────────────────────────────────────────────────────────
+
+interface PdfCacheEntry {
+  noteId: string;
+  data: Uint8Array;
+  updatedAt: string;
+  sizeBytes: number;
+  lastRead: number;
+}
+
+// ─── Internal IDB helpers ─────────────────────────────────────────────────────
+
+function idbGet<T>(db: IDBDatabase, key: string): Promise<T | undefined> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const request = tx.objectStore(STORE_NAME).get(key);
+    request.onsuccess = () => resolve(request.result as T | undefined);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function idbPut(db: IDBDatabase, value: PdfCacheEntry): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const request = tx.objectStore(STORE_NAME).put(value);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function idbDelete(db: IDBDatabase, key: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const request = tx.objectStore(STORE_NAME).delete(key);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// ─── LRU Eviction ─────────────────────────────────────────────────────────────
+
+async function evictIfNeeded(db: IDBDatabase, incomingSizeBytes: number): Promise<void> {
+  // Read all entries sorted by lastRead ascending (oldest first)
+  const allEntries = await new Promise<PdfCacheEntry[]>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const index = tx.objectStore(STORE_NAME).index('lastRead');
+    const request = index.getAll();
+    request.onsuccess = () => resolve(request.result as PdfCacheEntry[]);
+    request.onerror = () => reject(request.error);
+  });
+
+  const totalCurrentBytes = allEntries.reduce((sum, e) => sum + e.sizeBytes, 0);
+
+  if (totalCurrentBytes + incomingSizeBytes <= STORAGE_CAP_BYTES) return;
+
+  // Delete LRU entries until we have room
+  let freed = 0;
+  const needed = (totalCurrentBytes + incomingSizeBytes) - STORAGE_CAP_BYTES;
+
+  for (const entry of allEntries) {
+    if (freed >= needed) break;
+    await idbDelete(db, entry.noteId);
+    freed += entry.sizeBytes;
+  }
+}
