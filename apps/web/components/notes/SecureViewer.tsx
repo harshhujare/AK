@@ -97,6 +97,14 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
   // ─── Touch Pinch Zoom Handling ─────────────────────────────────────────────
   const [initialPinchDist, setInitialPinchDist] = useState<number | null>(null);
   const [initialScale, setInitialScale] = useState(1);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [lastTouch, setLastTouch] = useState<{ x: number, y: number } | null>(null);
+
+  useEffect(() => {
+    if (scale <= 1) {
+      setPosition({ x: 0, y: 0 });
+    }
+  }, [scale]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
@@ -106,6 +114,7 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
       );
       setInitialPinchDist(dist);
       setInitialScale(scale);
+      setLastTouch(null); // Reset single touch pan
 
       if (scale === 1 && zoomWrapperRef.current) {
         const rect = zoomWrapperRef.current.getBoundingClientRect();
@@ -116,6 +125,8 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
         const originY = clientY - rect.top;
         setTransformOrigin(`${originX}px ${originY}px`);
       }
+    } else if (e.touches.length === 1 && scale > 1) {
+      setLastTouch({ x: e.touches[0].clientX, y: e.touches[0].clientY });
     }
   };
 
@@ -127,12 +138,25 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
       );
       const newScale = Math.min(Math.max(initialScale * (dist / initialPinchDist), 0.5), 3.0);
       setScale(newScale);
+      setLastTouch(null);
+    } else if (e.touches.length === 1 && lastTouch && scale > 1) {
+      const dx = e.touches[0].clientX - lastTouch.x;
+      const dy = e.touches[0].clientY - lastTouch.y;
+      // We don't divide by scale here because CSS translate happens AFTER scale by default if order is: transform: scale(...) translate(...)
+      // Actually, wait! CSS transform: scale(s) translate(x,y) applies scale FIRST, meaning the translate coordinates are also scaled! 
+      // This means a translate of 10px moves the visual element by 10 * scale pixels. 
+      // To move the element by exactly `dx` screen pixels, we must translate by `dx / scale`.
+      setPosition(prev => ({ x: prev.x + dx / scale, y: prev.y + dy / scale }));
+      setLastTouch({ x: e.touches[0].clientX, y: e.touches[0].clientY });
     }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
     if (e.touches.length < 2) {
       setInitialPinchDist(null);
+    }
+    if (e.touches.length === 0) {
+      setLastTouch(null);
     }
   };
 
@@ -381,7 +405,7 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
         {fetchState.stage === 'ready' && (
           <div 
             className="pdf-zoom-wrapper" 
-            style={{ transform: `scale(${scale})`, transformOrigin }}
+            style={{ transform: `scale(${scale}) translate(${position.x}px, ${position.y}px)`, transformOrigin }}
             ref={zoomWrapperRef}
           >
             <div className="pdf-pages-container">
