@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Plus } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 
 interface Subject {
@@ -18,6 +19,9 @@ export default function SubjectsPage() {
   const [newSubject, setNewSubject] = useState({ name: '', nameMarathi: '' });
   const [formError, setFormError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', nameMarathi: '', order: 0 });
+  const [editError, setEditError] = useState<string | null>(null);
 
   const { data: subjects, isLoading } = useQuery({
     queryKey: ['subjects'],
@@ -42,6 +46,20 @@ export default function SubjectsPage() {
     onError: (err: any) => setFormError(err?.response?.data?.error || 'Failed to create subject'),
   });
 
+  const updateMutation = useMutation({
+    mutationFn: () => apiClient.patch(`/api/subjects/${editingSubject!.id}`, {
+      name: editForm.name,
+      nameMarathi: editForm.nameMarathi || null,
+      order: editForm.order,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['subjects'] });
+      setEditingSubject(null);
+      setEditError(null);
+    },
+    onError: (err: any) => setEditError(err?.response?.data?.error || 'Failed to update subject'),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiClient.delete(`/api/subjects/${id}`),
     onSuccess: () => {
@@ -58,6 +76,19 @@ export default function SubjectsPage() {
     createMutation.mutate();
   };
 
+  const openEdit = (sub: Subject) => {
+    setEditingSubject(sub);
+    setEditForm({ name: sub.name, nameMarathi: sub.nameMarathi ?? '', order: sub.order });
+    setEditError(null);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditError(null);
+    if (!editForm.name.trim()) { setEditError('Name is required'); return; }
+    updateMutation.mutate();
+  };
+
   return (
     <div className="admin-page">
       <header className="admin-page-header">
@@ -65,8 +96,8 @@ export default function SubjectsPage() {
           <h1 className="admin-page-title font-serif">Subjects</h1>
           <p className="admin-page-desc">Manage subject categories for notes.</p>
         </div>
-        <button className="btn-primary" onClick={() => setShowForm(!showForm)} id="add-subject-btn">
-          {showForm ? 'Cancel' : '+ Add Subject'}
+        <button className="btn-primary" onClick={() => setShowForm(!showForm)} id="add-subject-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+          {showForm ? 'Cancel' : <><Plus size={16} /> Add Subject</>}
         </button>
       </header>
 
@@ -122,14 +153,67 @@ export default function SubjectsPage() {
                   {sub.nameMarathi && <span className="subject-name-mr">{sub.nameMarathi}</span>}
                 </div>
               </div>
-              <button
-                className="delete-btn"
-                onClick={() => setDeletingId(sub.id)}
-              >
-                Delete
-              </button>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button className="edit-btn" onClick={() => openEdit(sub)}>Edit</button>
+                <button
+                  className="delete-btn"
+                  onClick={() => setDeletingId(sub.id)}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {editingSubject && (
+        <div className="modal-overlay" onClick={() => setEditingSubject(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3 className="modal-title">Edit Subject</h3>
+            <form onSubmit={handleEditSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {editError && <div className="form-error">{editError}</div>}
+
+              <div className="form-group">
+                <label className="input-label" htmlFor="edit-sub-name">English Name *</label>
+                <input
+                  id="edit-sub-name" type="text" className="form-input"
+                  placeholder="e.g. Child Development"
+                  value={editForm.name}
+                  onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="input-label" htmlFor="edit-sub-name-mr">मराठी नाव <span style={{ fontWeight: 400, textTransform: 'none', color: 'var(--text-muted)' }}>(optional)</span></label>
+                <input
+                  id="edit-sub-name-mr" type="text" className="form-input"
+                  placeholder="उदा. बालविकास"
+                  value={editForm.nameMarathi}
+                  onChange={e => setEditForm(f => ({ ...f, nameMarathi: e.target.value }))}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="input-label" htmlFor="edit-sub-order">Display Order</label>
+                <input
+                  id="edit-sub-order" type="number" className="form-input"
+                  min={0} value={editForm.order}
+                  onChange={e => setEditForm(f => ({ ...f, order: parseInt(e.target.value) || 0 }))}
+                />
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Lower number = shown first.</span>
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setEditingSubject(null)}>Cancel</button>
+                <button type="submit" className="btn-primary" disabled={updateMutation.isPending}>
+                  {updateMutation.isPending ? 'Saving…' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -166,6 +250,7 @@ export default function SubjectsPage() {
           cursor: pointer; transition: opacity 0.15s; white-space: nowrap;
         }
         .btn-primary:hover { opacity: 0.9; }
+        .btn-primary:disabled { opacity: 0.7; cursor: not-allowed; }
 
         .btn-secondary {
           padding: 0.6rem 1.25rem; background: var(--bg-surface-2); color: var(--text-primary);
@@ -199,9 +284,12 @@ export default function SubjectsPage() {
           flex: 1; min-width: 140px; background: var(--input-bg);
           border: 1px solid var(--border); border-radius: 8px;
           padding: 0.6rem 0.875rem; color: var(--text-primary); font-size: 0.875rem; outline: none;
+          font-family: inherit;
         }
         .form-input:focus { border-color: var(--border-strong); }
         .form-input::placeholder { color: var(--text-placeholder); }
+
+        .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
 
         .subject-list { display: flex; flex-direction: column; gap: 0.5rem; }
         .subject-skeleton {
@@ -221,6 +309,13 @@ export default function SubjectsPage() {
         .subject-order { font-size: 0.75rem; color: var(--text-muted); width: 1.5rem; }
         .subject-name { font-size: 0.9rem; color: var(--text-primary); }
         .subject-name-mr { font-size: 0.8rem; color: var(--text-secondary); margin-left: 0.5rem; }
+
+        .edit-btn {
+          padding: 0.35rem 0.7rem; border-radius: 6px; font-size: 0.75rem;
+          border: 1px solid var(--border); background: var(--bg-surface-2);
+          color: var(--text-primary); cursor: pointer; transition: all 0.15s;
+        }
+        .edit-btn:hover { border-color: var(--border-strong); background: var(--bg-hover); }
 
         .delete-btn {
           padding: 0.35rem 0.7rem; border-radius: 6px; font-size: 0.75rem;
@@ -242,11 +337,11 @@ export default function SubjectsPage() {
         }
         .modal {
           background: var(--bg-surface); border: 1px solid var(--border);
-          border-radius: 16px; padding: 2rem; max-width: 400px; width: 100%;
+          border-radius: 16px; padding: 2rem; max-width: 440px; width: 100%;
         }
-        .modal-title { font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem; }
+        .modal-title { font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 1rem; }
         .modal-desc { color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1.5rem; }
-        .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
+        .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 0.5rem; }
       `}</style>
     </div>
   );

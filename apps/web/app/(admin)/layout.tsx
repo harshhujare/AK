@@ -3,14 +3,15 @@
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { LayoutDashboard, Megaphone, BookOpen, FileText, Users } from 'lucide-react';
 import useAuthStore from '@/lib/auth-store';
 
 const NAV_ITEMS = [
-  { href: '/admin', label: 'Dashboard', icon: '◈', exact: true },
-  { href: '/admin/announcements', label: 'Announcements', icon: '📢', exact: false },
-  { href: '/admin/subjects', label: 'Subjects', icon: '📚', exact: false },
-  { href: '/admin/notes', label: 'Notes', icon: '📄', exact: false },
-  { href: '/admin/users', label: 'Users', icon: '👥', exact: false },
+  { href: '/admin', label: 'Dashboard', icon: <LayoutDashboard size={18} />, exact: true },
+  { href: '/admin/announcements', label: 'Announcements', icon: <Megaphone size={18} />, exact: false },
+  { href: '/admin/subjects', label: 'Subjects', icon: <BookOpen size={18} />, exact: false },
+  { href: '/admin/notes', label: 'Notes', icon: <FileText size={18} />, exact: false },
+  { href: '/admin/users', label: 'Users', icon: <Users size={18} />, exact: false },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

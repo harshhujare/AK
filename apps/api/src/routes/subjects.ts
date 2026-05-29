@@ -26,6 +26,30 @@ subjectsRouter.post('/', requireAdmin(), asyncHandler(async (req: Request, res: 
   res.status(201).json({ data: subject });
 }));
 
+// PATCH /api/subjects/:id — admin only
+subjectsRouter.patch('/:id', requireAdmin(), asyncHandler(async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  const subject = await prisma.subject.findUnique({ where: { id } });
+  if (!subject) {
+    res.status(404).json({ error: 'Subject not found' });
+    return;
+  }
+
+  const { name, nameMarathi, order } = req.body;
+  const data: { name?: string; nameMarathi?: string | null; order?: number } = {};
+  if (name !== undefined) data.name = name;
+  if (nameMarathi !== undefined) data.nameMarathi = nameMarathi || null;
+  if (order !== undefined) data.order = parseInt(order);
+
+  if (Object.keys(data).length === 0) {
+    res.status(400).json({ error: 'No fields to update' });
+    return;
+  }
+
+  const updated = await prisma.subject.update({ where: { id }, data });
+  res.json({ data: updated });
+}));
+
 // DELETE /api/subjects/:id — admin only
 subjectsRouter.delete('/:id', requireAdmin(), asyncHandler(async (req: Request, res: Response) => {
   const id = String(req.params.id);

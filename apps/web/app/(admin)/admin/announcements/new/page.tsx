@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Play, Image as ImageIcon, ArrowLeft } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 
 export default function NewAnnouncementPage() {
@@ -67,7 +68,9 @@ export default function NewAnnouncementPage() {
     <div className="form-page">
       <header className="admin-page-header">
         <div>
-          <Link href="/admin/announcements" className="back-link">← Back</Link>
+          <Link href="/admin/announcements" className="back-link" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+            <ArrowLeft size={14} /> Back
+          </Link>
           <h1 className="admin-page-title font-serif" style={{ marginTop: '0.5rem' }}>New Announcement</h1>
         </div>
       </header>
@@ -81,13 +84,15 @@ export default function NewAnnouncementPage() {
           <div className="type-selector">
             <button type="button"
               className={`type-btn ${form.type === 'IMAGE' ? 'type-btn--active' : ''}`}
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
               onClick={() => setForm(f => ({ ...f, type: 'IMAGE' }))}>
-              🖼️ Image Announcement
+              <ImageIcon size={18} /> Image Announcement
             </button>
             <button type="button"
               className={`type-btn ${form.type === 'VIDEO' ? 'type-btn--active' : ''}`}
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
               onClick={() => setForm(f => ({ ...f, type: 'VIDEO' }))}>
-              ▶ YouTube Video
+              <Play size={18} /> YouTube Video
             </button>
           </div>
         </div>
