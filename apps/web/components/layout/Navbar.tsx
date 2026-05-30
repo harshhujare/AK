@@ -61,9 +61,9 @@ export default function Navbar() {
         <div className="navbar-inner">
           {/* Logo */}
           <Link href="/" className="navbar-logo" aria-label="AjitSir Academy Home">
-            <span className="navbar-logo-dot" aria-hidden="true" />
-            <span className="navbar-logo-text font-serif">AjitSir Academy</span>
-          </Link>
+          <span className="navbar-logo-dot" aria-hidden="true" />
+          <span className="navbar-logo-text font-serif">AjitSir.in</span>
+          </Link> 
 
           {/* Desktop nav links */}
           <div className="navbar-links" role="list">

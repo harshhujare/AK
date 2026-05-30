@@ -20,15 +20,36 @@ interface Note {
 export default function NotesAdminPage() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [editForm, setEditForm] = useState({ title: '', description: '', subjectId: '', isPaid: false });
   const [editError, setEditError] = useState<string | null>(null);
 
-  const { data: notes, isLoading } = useQuery({
-    queryKey: ['admin-notes'],
+  const handleSearch = (val: string) => {
+    setSearch(val);
+    clearTimeout((window as any)._searchTimeout);
+    (window as any)._searchTimeout = setTimeout(() => {
+      setDebouncedSearch(val);
+      setPage(1);
+    }, 400);
+  };
+
+  interface NotesResponse {
+    notes: Note[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }
+
+  const { data: notesResponse, isLoading } = useQuery({
+    queryKey: ['admin-notes', page, debouncedSearch],
     queryFn: async () => {
-      const { data } = await apiClient.get<{ data: Note[] }>('/api/notes');
+      const params = new URLSearchParams({ page: String(page), limit: '20' });
+      if (debouncedSearch) params.set('search', debouncedSearch);
+      const { data } = await apiClient.get<{ data: NotesResponse }>(`/api/notes?${params}`);
       return data.data;
     },
   });
@@ -86,10 +107,7 @@ export default function NotesAdminPage() {
     updateMutation.mutate();
   };
 
-  const filtered = notes?.filter(n =>
-    !search || n.title.toLowerCase().includes(search.toLowerCase()) ||
-    n.subject.name.toLowerCase().includes(search.toLowerCase())
-  ) ?? [];
+  const notes = notesResponse?.notes ?? [];
 
   return (
     <div className="admin-page">
@@ -108,7 +126,7 @@ export default function NotesAdminPage() {
           id="notes-search" type="search" className="search-input"
           placeholder="Search by title or subject…"
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={e => handleSearch(e.target.value)}
         />
       </div>
 
@@ -116,9 +134,9 @@ export default function NotesAdminPage() {
         <div className="notes-skeleton">
           {[1,2,3,4].map(i => <div key={i} className="skeleton-row" />)}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : notes.length === 0 ? (
         <div className="empty-state">
-          {notes?.length === 0 ? (
+          {notesResponse?.notes?.length === 0 && !search ? (
             <>
               <p>No notes uploaded yet.</p>
               <Link href="/admin/notes/upload" className="btn-primary" style={{ marginTop: '1rem', display: 'inline-block' }}>
@@ -143,7 +161,7 @@ export default function NotesAdminPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(note => (
+              {notes.map(note => (
                 <tr key={note.id}>
                   <td>
                     <span className="note-title">{note.title}</span>
@@ -171,6 +189,14 @@ export default function NotesAdminPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {notesResponse && notesResponse.totalPages > 1 && (
+        <div className="pagination" style={{ display: 'flex', alignItems: 'center', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem' }}>
+          <button className="btn-secondary" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>← Prev</button>
+          <span className="page-info" style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Page {notesResponse.page} of {notesResponse.totalPages}</span>
+          <button className="btn-secondary" disabled={page >= notesResponse.totalPages} onClick={() => setPage(p => p + 1)}>Next →</button>
         </div>
       )}
 

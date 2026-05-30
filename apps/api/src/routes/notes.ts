@@ -12,25 +12,44 @@ export const notesRouter = Router();
 // GET /api/notes — public list (no fileKey exposed)
 notesRouter.get('/', asyncHandler(async (req: Request, res: Response) => {
   const { subjectId } = req.query;
+  const page = Math.max(1, parseInt(req.query.page as string) || 1);
+  const limit = Math.min(100, parseInt(req.query.limit as string) || 20);
+  const search = (req.query.search as string) || '';
 
-  const notes = await prisma.note.findMany({
-    where: subjectId ? { subjectId: String(subjectId) } : undefined,
-    orderBy: { createdAt: 'desc' },
-    select: {
-      id: true,
-      title: true,
-      description: true,
-      isPaid: true,
-      pageCount: true,
-      createdAt: true,
-      updatedAt: true,
-      subjectId: true,
-      subject: { select: { id: true, name: true, nameMarathi: true, order: true } },
-      // fileKey deliberately excluded
-      // thumbnailKey excluded (only used server-side)
-    },
-  });
-  res.json({ data: notes });
+  const where: any = {};
+  if (subjectId) where.subjectId = String(subjectId);
+  if (search) {
+    where.OR = [
+      { title: { contains: search, mode: 'insensitive' } },
+      { description: { contains: search, mode: 'insensitive' } },
+      { subject: { name: { contains: search, mode: 'insensitive' } } }
+    ];
+  }
+
+  const [notes, total] = await withRetry(() => Promise.all([
+    prisma.note.findMany({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        isPaid: true,
+        pageCount: true,
+        createdAt: true,
+        updatedAt: true,
+        subjectId: true,
+        subject: { select: { id: true, name: true, nameMarathi: true, order: true } },
+        // fileKey deliberately excluded
+        // thumbnailKey excluded (only used server-side)
+      },
+    }),
+    prisma.note.count({ where }),
+  ]));
+
+  res.json({ data: { notes, total, page, limit, totalPages: Math.ceil(total / limit) } });
 }));
 
 // GET /api/notes/:id/stream — authenticated, streams PDF bytes through the API
