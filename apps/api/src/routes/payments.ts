@@ -18,9 +18,7 @@ paymentsRouter.use((_req: Request, res: Response, next: NextFunction) => {
 
 // Plan pricing config (paise)
 const PLAN_PRICING: Record<string, number> = {
-  '30': 49900,   // ₹499 / month
-  '180': 249900, // ₹2499 / 6 months
-  '365': 399900, // ₹3999 / year
+  '365': 9900, // ₹99 / year
 };
 
 // POST /api/payments/create-order
@@ -35,6 +33,30 @@ paymentsRouter.post('/create-order', requireAuth(), async (req: Request, res: Re
   const amount = PLAN_PRICING[parsed.data.planDuration];
   if (!amount) {
     res.status(400).json({ error: 'Invalid plan duration' });
+    return;
+  }
+
+  // Idempotency: return existing PENDING order if created within the last 30 minutes
+  const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
+  const existingOrder = await prisma.payment.findFirst({
+    where: {
+      userId: req.user!.userId,
+      status: 'PENDING',
+      planDuration,
+      createdAt: { gte: thirtyMinsAgo }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  if (existingOrder) {
+    res.json({
+      data: {
+        orderId: existingOrder.razorpayOrderId,
+        amount: existingOrder.amount,
+        currency: 'INR',
+        keyId: process.env.RAZORPAY_KEY_ID,
+      },
+    });
     return;
   }
 
@@ -87,6 +109,13 @@ paymentsRouter.post('/verify', requireAuth(), async (req: Request, res: Response
     return;
   }
 
+  // Idempotency: if already SUCCESS, don't extend expiry again
+  if (payment.status === 'SUCCESS') {
+    const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { planExpiresAt: true } });
+    res.json({ data: { message: 'Payment already verified.', planExpiresAt: user?.planExpiresAt } });
+    return;
+  }
+
   // Upgrade plan
   const planExpiresAt = new Date();
   planExpiresAt.setDate(planExpiresAt.getDate() + payment.planDuration);
@@ -124,15 +153,29 @@ paymentsRouter.post('/webhook', async (req: Request, res: Response) => {
   const orderId = req.body.payload?.payment?.entity?.order_id;
 
   if (event === 'payment.captured' && orderId) {
-    await prisma.payment.updateMany({
-      where: { razorpayOrderId: orderId, status: 'PENDING' },
-      data: { status: 'SUCCESS' },
-    });
+    const payment = await prisma.payment.findUnique({ where: { razorpayOrderId: orderId } });
+    
+    // Idempotency: only apply if PENDING
+    if (payment && payment.status === 'PENDING') {
+      const planExpiresAt = new Date();
+      planExpiresAt.setDate(planExpiresAt.getDate() + payment.planDuration);
+      
+      await prisma.$transaction([
+        prisma.payment.update({
+          where: { razorpayOrderId: orderId },
+          data: { status: 'SUCCESS' },
+        }),
+        prisma.user.update({
+          where: { id: payment.userId },
+          data: { plan: 'PAID', planExpiresAt },
+        }),
+      ]);
+    }
   }
 
   if (event === 'payment.failed' && orderId) {
     await prisma.payment.updateMany({
-      where: { razorpayOrderId: orderId },
+      where: { razorpayOrderId: orderId, status: 'PENDING' },
       data: { status: 'FAILED' },
     });
   }
