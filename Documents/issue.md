@@ -38,3 +38,14 @@ date:28-05-2026
 - if possible they should make the tab full screen 
 - they should rotate the pdf 
 -the username whatermark overlaps on eachother 
+
+date :29-05-2026
+
+1.the anouncement in  /admin/announcements create update anouncement functionality
+-curruntly it can only add and delete anouncemet not update
+same for /admin/notes update nots functionality is missing
+same forr subjects /admin/subject
+
+date :30-05-2026
+1. in the /admin/users we fetch all users at a time but there can be more than 1000 users so it is causing a performance issue we have to implement pagination 
+and same for /admin/notes

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { prisma } from '../lib/prisma';
+import { prisma, withRetry } from '../lib/prisma';
 import { requireAdmin, requireSuperAdmin } from '../middleware/auth';
 import { UpdateUserPlanSchema } from '@ajitsir/shared';
 import { Role, Plan } from '@prisma/client';
@@ -12,7 +12,7 @@ adminRouter.use(requireAdmin());
 // GET /api/admin/stats — full platform statistics
 adminRouter.get('/stats', async (_req: Request, res: Response) => {
   const [totalUsers, totalNotes, activeAnnouncements, todayViews, revenueResult] =
-    await Promise.all([
+    await withRetry(() => Promise.all([
       prisma.user.count(),
       prisma.note.count(),
       prisma.announcement.count({ where: { isActive: true } }),
@@ -27,7 +27,7 @@ adminRouter.get('/stats', async (_req: Request, res: Response) => {
         where: { status: 'SUCCESS' },
         _sum: { amount: true },
       }),
-    ]);
+    ]));
 
   res.json({
     data: {
@@ -56,7 +56,7 @@ adminRouter.get('/users', async (req: Request, res: Response) => {
       }
     : {};
 
-  const [users, total] = await Promise.all([
+  const [users, total] = await withRetry(() => Promise.all([
     prisma.user.findMany({
       where,
       skip: (page - 1) * limit,
@@ -73,7 +73,7 @@ adminRouter.get('/users', async (req: Request, res: Response) => {
       },
     }),
     prisma.user.count({ where }),
-  ]);
+  ]));
 
   res.json({ data: { users, total, page, limit, totalPages: Math.ceil(total / limit) } });
 });
@@ -94,11 +94,11 @@ adminRouter.patch('/users/:id/plan', async (req: Request, res: Response) => {
     planExpiresAt.setDate(planExpiresAt.getDate() + planDuration);
   }
 
-  const user = await prisma.user.update({
+  const user = await withRetry(() => prisma.user.update({
     where: { id: String(req.params.id) },
     data: { plan: plan as Plan, planExpiresAt },
     select: { id: true, name: true, email: true, plan: true, planExpiresAt: true },
-  });
+  }));
 
   res.json({ data: user });
 });
@@ -113,11 +113,11 @@ adminRouter.patch('/users/:id/role', requireSuperAdmin(), async (req: Request, r
     return;
   }
 
-  const user = await prisma.user.update({
+  const user = await withRetry(() => prisma.user.update({
     where: { id: String(req.params.id) },
     data: { role: role as Role },
     select: { id: true, name: true, email: true, role: true, plan: true },
-  });
+  }));
 
   res.json({ data: user });
 });

@@ -10,7 +10,7 @@ import SubjectFilter from '@/components/notes/SubjectFilter';
 import NoteCard from '@/components/notes/NoteCard';
 import dynamic from 'next/dynamic';
 
-const SecureViewer = dynamic(() => import('@/components/notes/SecureViewer'), {
+const SecureViewer = dynamic(() => import('@/features/notes/viewer/SecureViewer'), {
   ssr: false,
 });
 
@@ -19,9 +19,15 @@ export default function Home() {
   const { data: announcements, isLoading: loadingAnnouncements } = useAnnouncements();
   
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
-  const { data: notes, isLoading: loadingNotes } = useNotes(selectedSubject);
+  const [page, setPage] = useState(1);
+  const { data: notesResponse, isLoading: loadingNotes } = useNotes(selectedSubject, page, 20);
   
   const [viewingNote, setViewingNote] = useState<NoteWithSubject | null>(null);
+
+  const handleSubjectSelect = (subjectId: string | null) => {
+    setSelectedSubject(subjectId);
+    setPage(1);
+  };
 
   return (
     <div className="homepage">
@@ -56,7 +62,7 @@ export default function Home() {
 
           <SubjectFilter 
             selectedSubject={selectedSubject} 
-            onSelect={setSelectedSubject} 
+            onSelect={handleSubjectSelect} 
           />
 
           {loadingNotes ? (
@@ -65,17 +71,41 @@ export default function Home() {
                 <div key={i} className="note-skeleton" />
               ))}
             </div>
-          ) : notes && notes.length > 0 ? (
-            <div className="notes-grid">
-              {notes.map((note) => (
-                <NoteCard 
-                  key={note.id} 
-                  note={note} 
-                  isAuthenticated={!!user} 
-                  onClick={setViewingNote} 
-                />
-              ))}
-            </div>
+          ) : notesResponse && notesResponse.notes.length > 0 ? (
+            <>
+              <div className="notes-grid">
+                {notesResponse.notes.map((note) => (
+                  <NoteCard 
+                    key={note.id} 
+                    note={note} 
+                    isAuthenticated={!!user} 
+                    onClick={setViewingNote} 
+                  />
+                ))}
+              </div>
+
+              {notesResponse.totalPages > 1 && (
+                <div className="pagination" style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '2.5rem' }}>
+                  <button 
+                    className="btn-secondary" 
+                    disabled={page <= 1} 
+                    onClick={() => setPage(p => p - 1)}
+                  >
+                    &larr; Previous
+                  </button>
+                  <span style={{ alignSelf: 'center', color: 'var(--text-muted)' }}>
+                    Page {page} of {notesResponse.totalPages}
+                  </span>
+                  <button 
+                    className="btn-secondary" 
+                    disabled={page >= notesResponse.totalPages} 
+                    onClick={() => setPage(p => p + 1)}
+                  >
+                    Next &rarr;
+                  </button>
+                </div>
+              )}
+            </>
           ) : (
             <div className="empty-state">
               <p>No notes found for this subject.</p>
