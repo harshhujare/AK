@@ -14,6 +14,7 @@ interface AuthState {
   logout: () => Promise<void>;
   initialize: () => Promise<void>;
   setAccessToken: (accessToken: string) => void;
+  refresh: () => Promise<void>;
 }
 
 const useAuthStore = create<AuthState>((set, get) => ({
@@ -80,14 +81,7 @@ const useAuthStore = create<AuthState>((set, get) => ({
 
         // Try silent refresh via httpOnly cookie
         try {
-          const { data } = await apiClient.post('/api/auth/refresh');
-          const newToken = data.data.accessToken;
-          localStorage.setItem('accessToken', newToken);
-
-          const meResponse = await apiClient.get('/api/auth/me');
-          const user = meResponse.data.data as User;
-          localStorage.setItem('user', JSON.stringify(user));
-          set({ user, accessToken: newToken });
+          await get().refresh();
         } catch {
           // No valid session — user needs to log in
           localStorage.removeItem('accessToken');
@@ -98,6 +92,21 @@ const useAuthStore = create<AuthState>((set, get) => ({
     } finally {
       set({ isLoading: false, isInitialized: true });
     }
+  },
+
+  refresh: async () => {
+    const { data } = await apiClient.post('/api/auth/refresh');
+    const newToken = data.data.accessToken;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('accessToken', newToken);
+    }
+
+    const meResponse = await apiClient.get('/api/auth/me');
+    const user = meResponse.data.data as User;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('user', JSON.stringify(user));
+    }
+    set({ user, accessToken: newToken });
   },
 }));
 

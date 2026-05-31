@@ -9,6 +9,7 @@ import Slider from '@/components/ui/Slider';
 import SubjectFilter from '@/components/notes/SubjectFilter';
 import NoteCard from '@/components/notes/NoteCard';
 import dynamic from 'next/dynamic';
+import { useCheckout } from '@/features/payment/hooks/useCheckout';
 
 const SecureViewer = dynamic(() => import('@/features/notes/viewer/SecureViewer'), {
   ssr: false,
@@ -21,6 +22,8 @@ export default function Home() {
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const { data: notesResponse, isLoading: loadingNotes } = useNotes(selectedSubject, page, 20);
+  
+  const { state: checkoutState, checkout } = useCheckout();
   
   const [viewingNote, setViewingNote] = useState<NoteWithSubject | null>(null);
 
