@@ -81,7 +81,7 @@ export default function Home() {
                   <NoteCard 
                     key={note.id} 
                     note={note} 
-                    isAuthenticated={!!user} 
+                    user={user} 
                     onClick={setViewingNote} 
                   />
                 ))}
