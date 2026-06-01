@@ -17,7 +17,11 @@ export default function NoteCard({ note, user, onClick }: NoteCardProps) {
   const thumbnailUrl = `${API_URL}/api/notes/${note.id}/thumbnail`;
 
   const hasAccess = !note.isPaid || 
-    (user && (user.role === 'SUPER_ADMIN' || user.role === 'CONTENT_MANAGER' || user.plan === 'PAID'));
+    (user && (
+      user.role === 'SUPER_ADMIN' || 
+      user.role === 'CONTENT_MANAGER' || 
+      (user.plan === 'PAID' && (!user.planExpiresAt || new Date(user.planExpiresAt).getTime() > Date.now()))
+    ));
 
   const handleClick = () => {
     if (hasAccess) {

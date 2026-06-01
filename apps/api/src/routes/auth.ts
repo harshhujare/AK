@@ -6,6 +6,17 @@ import { verifyGoogleIdToken } from '../services/google';
 import { RegisterSchema, LoginSchema, GoogleAuthSchema } from '@ajitsir/shared';
 import { asyncHandler } from '../lib/asyncHandler';
 
+async function checkAndDowngradePlan<T extends { id: string; plan: string; planExpiresAt: Date | null }>(user: T): Promise<T> {
+  if (user.plan === 'PAID' && user.planExpiresAt && user.planExpiresAt < new Date()) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { plan: 'FREE' }
+    });
+    return { ...user, plan: 'FREE' };
+  }
+  return user;
+}
+
 export const authRouter = Router();
 
 const isProduction = process.env.NODE_ENV === 'production';
@@ -66,7 +77,7 @@ authRouter.post('/login', asyncHandler(async (req: Request, res: Response) => {
   }
   const { email, password } = parsed.data;
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  let user = await prisma.user.findUnique({ where: { email } });
   if (!user || !user.passwordHash) {
     res.status(401).json({ error: 'Invalid email or password' });
     return;
@@ -77,6 +88,8 @@ authRouter.post('/login', asyncHandler(async (req: Request, res: Response) => {
     res.status(401).json({ error: 'Invalid email or password' });
     return;
   }
+
+  user = await checkAndDowngradePlan(user);
 
   const accessToken = signAccessToken({ userId: user.id, role: user.role, plan: user.plan });
   const refreshToken = signRefreshToken(user.id);
@@ -104,7 +117,7 @@ authRouter.post('/google', asyncHandler(async (req: Request, res: Response) => {
   }
 
   // Upsert user — create if first time, find if returning
-  const user = await withRetry(() => prisma.user.upsert({
+  let user = await withRetry(() => prisma.user.upsert({
     where: { googleId: googleUser.googleId },
     update: { name: googleUser.name },
     create: {
@@ -113,6 +126,8 @@ authRouter.post('/google', asyncHandler(async (req: Request, res: Response) => {
       googleId: googleUser.googleId,
     },
   }));
+
+  user = await checkAndDowngradePlan(user);
 
   const accessToken = signAccessToken({ userId: user.id, role: user.role, plan: user.plan });
   const refreshToken = signRefreshToken(user.id);
@@ -133,11 +148,13 @@ authRouter.post('/refresh', asyncHandler(async (req: Request, res: Response) => 
 
   try {
     const { userId } = verifyRefreshToken(token);
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    let user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       res.status(401).json({ error: 'User not found' });
       return;
     }
+
+    user = await checkAndDowngradePlan(user);
 
     const accessToken = signAccessToken({ userId: user.id, role: user.role, plan: user.plan });
     res.json({ data: { accessToken } });
@@ -162,7 +179,7 @@ authRouter.get('/me', asyncHandler(async (req: Request, res: Response) => {
   const { verifyAccessToken } = await import('../services/token');
   try {
     const payload = verifyAccessToken(authHeader.slice(7));
-    const user = await prisma.user.findUnique({
+    let user = await prisma.user.findUnique({
       where: { id: payload.userId },
       select: { id: true, name: true, email: true, role: true, plan: true, planExpiresAt: true, createdAt: true },
     });
@@ -170,6 +187,7 @@ authRouter.get('/me', asyncHandler(async (req: Request, res: Response) => {
       res.status(404).json({ error: 'User not found' });
       return;
     }
+    user = await checkAndDowngradePlan(user);
     res.json({ data: { ...user, userId: user.id } });
   } catch {
     res.status(401).json({ error: 'Invalid token' });
