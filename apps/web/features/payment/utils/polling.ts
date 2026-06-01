@@ -20,8 +20,8 @@ export async function pollForPlanUpgrade(
       
       if (!res.ok) continue; // If 401/500, just keep trying or let it fail
       
-      const user = await res.json();
-      if (user.plan === 'PAID') {
+      const body = await res.json();
+      if (body.data?.plan === 'PAID') {
         return true;
       }
     } catch (e) {

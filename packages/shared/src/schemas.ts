@@ -57,7 +57,7 @@ export const CreateNoteSchema = z.object({
 
 // ─── Payments ─────────────────────────────────────────────────────────────────
 export const CreateOrderSchema = z.object({
-  planDuration: z.enum(['365']), // days as string from form
+  planDuration: z.enum(['30', '180', '365']), // days as string from form
 });
 
 export const VerifyPaymentSchema = z.object({

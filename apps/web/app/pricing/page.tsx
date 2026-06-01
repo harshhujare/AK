@@ -3,7 +3,13 @@
 import React from 'react';
 import useAuthStore from '@/lib/auth-store';
 import { useCheckout } from '@/features/payment/hooks/useCheckout';
-import PlanCard from '@/features/payment/components/PlanCard';
+import PlanCard, { type PlanData } from '@/features/payment/components/PlanCard';
+
+const PLANS: readonly PlanData[] = [
+  { duration: 30,  label: 'Monthly',  price: '₹499',   period: '30 days'   },
+  { duration: 180, label: '6-Month',  price: '₹2,499', period: '180 days', badge: 'Best value' },
+  { duration: 365, label: 'Annual',   price: '₹3,999', period: '365 days'  },
+] as const;
 
 export default function PricingPage() {
   const { user, isInitialized } = useAuthStore();
@@ -18,7 +24,11 @@ export default function PricingPage() {
           <p className="pricing-subtitle">Unlock unlimited access to all study materials.</p>
         </div>
         <div className="pricing-container" style={{ opacity: 0.5 }}>
-          <PlanCard isLoading={true} disabled={true} onSelect={() => {}} />
+          <div className="plans-grid">
+            {PLANS.map((plan) => (
+              <PlanCard key={plan.duration} plan={plan} isLoading={true} disabled={true} onSelect={() => {}} />
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -76,12 +86,18 @@ export default function PricingPage() {
           </div>
         )}
 
-        <PlanCard 
-          isLoading={isCheckoutActive}
-          disabled={isCheckoutActive}
-          statusText={statusText || (isActivePaid ? 'Renew Subscription' : undefined)}
-          onSelect={() => checkout('365')}
-        />
+        <div className="plans-grid">
+          {PLANS.map((plan) => (
+            <PlanCard 
+              key={plan.duration}
+              plan={plan}
+              isLoading={isCheckoutActive}
+              disabled={isCheckoutActive}
+              statusText={statusText || (isActivePaid ? 'Renew Subscription' : undefined)}
+              onSelect={(duration) => checkout(duration.toString() as any)}
+            />
+          ))}
+        </div>
         
         {checkoutState.status === 'error' && (
           <div className="error-message">
@@ -124,6 +140,15 @@ export default function PricingPage() {
           flex-direction: column;
           align-items: center;
           gap: 2rem;
+        }
+
+        .plans-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+          gap: 2rem;
+          width: 100%;
+          align-items: stretch;
+          margin-top: 1rem;
         }
 
         .active-plan-banner, .expired-plan-banner {

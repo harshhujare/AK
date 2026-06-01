@@ -18,7 +18,9 @@ paymentsRouter.use((_req: Request, res: Response, next: NextFunction) => {
 
 // Plan pricing config (paise)
 const PLAN_PRICING: Record<string, number> = {
-  '365': 9900, // ₹99 / year
+  '30': 49900,   // ₹499
+  '180': 249900, // ₹2,499
+  '365': 399900, // ₹3,999
 };
 
 // POST /api/payments/create-order

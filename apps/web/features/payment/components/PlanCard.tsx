@@ -1,28 +1,36 @@
 import React from 'react';
 
+export interface PlanData {
+  duration: 30 | 180 | 365;
+  label: string;
+  price: string;
+  period: string;
+  badge?: string;
+}
+
 interface PlanCardProps {
+  plan: PlanData;
   isLoading: boolean;
   disabled: boolean;
-  onSelect: () => void;
+  onSelect: (duration: 30 | 180 | 365) => void;
   statusText?: string;
 }
 
-export default function PlanCard({ isLoading, disabled, onSelect, statusText }: PlanCardProps) {
+export default function PlanCard({ plan, isLoading, disabled, onSelect, statusText }: PlanCardProps) {
   return (
     <div className="plan-card">
       <div className="plan-header">
-        <h3 className="plan-title">Annual Plan</h3>
-        <span className="plan-badge">Best Value</span>
+        <h3 className="plan-title">{plan.label} Plan</h3>
+        {plan.badge && <span className="plan-badge">{plan.badge}</span>}
       </div>
       
       <div className="plan-price-wrapper">
-        <span className="plan-currency">₹</span>
-        <span className="plan-price">99</span>
-        <span className="plan-period">/ 365 days</span>
+        <span className="plan-price">{plan.price}</span>
+        <span className="plan-period">/ {plan.period}</span>
       </div>
 
       <p className="plan-desc">
-        Get unlimited access to all premium TET study notes, chapter-wise PDFs, and exclusive content curated by Ajit Sir for a full year.
+        Get unlimited access to all premium TET study notes, chapter-wise PDFs, and exclusive content curated by Ajit Sir for {plan.period}.
       </p>
 
       <ul className="plan-features">
@@ -40,13 +48,13 @@ export default function PlanCard({ isLoading, disabled, onSelect, statusText }: 
         </li>
         <li>
           <CheckIcon />
-          <span>Valid for 365 days</span>
+          <span>Valid for {plan.period}</span>
         </li>
       </ul>
 
       <button
         className="plan-button"
-        onClick={onSelect}
+        onClick={() => onSelect(plan.duration)}
         disabled={disabled || isLoading}
       >
         {statusText || (isLoading ? 'Processing...' : 'Get Access Now')}
@@ -104,14 +112,8 @@ export default function PlanCard({ isLoading, disabled, onSelect, statusText }: 
           color: var(--text-primary, #111827);
         }
 
-        .plan-currency {
-          font-size: 1.5rem;
-          font-weight: 600;
-          margin-right: 0.2rem;
-        }
-
         .plan-price {
-          font-size: 4rem;
+          font-size: 3rem;
           font-weight: 800;
           line-height: 1;
           letter-spacing: -0.02em;
