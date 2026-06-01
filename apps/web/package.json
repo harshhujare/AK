@@ -12,6 +12,7 @@
     "@ajitsir/shared": "*",
     "@tanstack/react-query": "^5.100.14",
     "axios": "^1.16.1",
+    "date-fns": "^4.4.0",
     "embla-carousel-autoplay": "^8.6.0",
     "embla-carousel-react": "^8.6.0",
     "lucide-react": "^1.17.0",

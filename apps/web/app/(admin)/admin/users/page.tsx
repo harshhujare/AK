@@ -9,7 +9,7 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: 'STUDENT' | 'CONTENT_MANAGER' | 'SUPER_ADMIN';
+  role: 'STUDENT' | 'SUPPORT_MANAGER' | 'CONTENT_MANAGER' | 'SUPER_ADMIN';
   plan: 'FREE' | 'PAID';
   planExpiresAt: string | null;
   createdAt: string;
@@ -24,6 +24,7 @@ interface UsersResponse {
 
 const ROLE_LABELS: Record<string, string> = {
   STUDENT: 'Student',
+  SUPPORT_MANAGER: 'Support Mgr',
   CONTENT_MANAGER: 'Content Mgr',
   SUPER_ADMIN: 'Super Admin',
 };
@@ -173,7 +174,7 @@ export default function UsersPage() {
             <h3 className="modal-title">Change User Role</h3>
             <p className="modal-desc">Select the new role for this user.</p>
             <div className="role-options">
-              {(['STUDENT', 'CONTENT_MANAGER', 'SUPER_ADMIN'] as const).map(role => (
+              {(['STUDENT', 'SUPPORT_MANAGER', 'CONTENT_MANAGER', 'SUPER_ADMIN'] as const).map(role => (
                 <label key={role} className={`role-option ${selectedRole === role ? 'role-option--selected' : ''}`}>
                   <input type="radio" name="role" value={role}
                     checked={selectedRole === role}
@@ -182,6 +183,7 @@ export default function UsersPage() {
                   <span className="role-option-label">{ROLE_LABELS[role]}</span>
                   <span className="role-option-desc">
                     {role === 'STUDENT' ? 'Can only view notes' :
+                     role === 'SUPPORT_MANAGER' ? 'Can manage support tickets and FAQs' :
                      role === 'CONTENT_MANAGER' ? 'Can upload notes and manage announcements' :
                      'Full access to everything'}
                   </span>
@@ -265,6 +267,8 @@ export default function UsersPage() {
           font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; white-space: nowrap;
         }
         .role-badge--student { background: var(--bg-surface-2); color: var(--text-secondary); }
+        .role-badge--support_manager { background: rgba(59,130,246,0.1); color: #1d4ed8; border: 1px solid rgba(59,130,246,0.2); }
+        [data-theme="dark"] .role-badge--support_manager { background: rgba(59,130,246,0.15); color: #60a5fa; }
         .role-badge--content_manager { background: var(--info-bg); color: var(--info-text); border: 1px solid var(--border-strong); }
         .role-badge--super_admin { background: var(--accent-bg); color: var(--accent-text); border: 1px solid var(--border-strong); }
 

@@ -1,12 +1,32 @@
 import { Router, Request, Response } from 'express';
 import { prisma, withRetry } from '../lib/prisma';
-import { requireAdmin, requireSuperAdmin } from '../middleware/auth';
+import { requireAdmin, requireSuperAdmin, requireSupport } from '../middleware/auth';
 import { UpdateUserPlanSchema } from '@ajitsir/shared';
 import { Role, Plan } from '@prisma/client';
 
 export const adminRouter = Router();
 
-// All admin routes require at least CONTENT_MANAGER role
+// GET /api/admin/users/:id/lookup — Limited lookup for SUPPORT_MANAGER
+adminRouter.get('/users/:id/lookup', requireSupport(), async (req: Request, res: Response) => {
+  const user = await withRetry(() => prisma.user.findUnique({
+    where: { id: String(req.params.id) },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      plan: true,
+      planExpiresAt: true,
+      createdAt: true,
+    }
+  }));
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+  res.json({ data: user });
+});
+
+// All subsequent admin routes require at least CONTENT_MANAGER role
 adminRouter.use(requireAdmin());
 
 // GET /api/admin/stats — full platform statistics
@@ -106,9 +126,9 @@ adminRouter.patch('/users/:id/plan', async (req: Request, res: Response) => {
 // PATCH /api/admin/users/:id/role — change user role (SUPER_ADMIN only)
 adminRouter.patch('/users/:id/role', requireSuperAdmin(), async (req: Request, res: Response) => {
   const { role } = req.body as { role: string };
-  const validRoles = ['STUDENT', 'CONTENT_MANAGER', 'SUPER_ADMIN'] as const;
+  const validRoles = ['STUDENT', 'SUPPORT_MANAGER', 'CONTENT_MANAGER'];
 
-  if (!role || !validRoles.includes(role as Role)) {
+  if (!role || !validRoles.includes(role)) {
     res.status(400).json({ error: `role must be one of: ${validRoles.join(', ')}` });
     return;
   }

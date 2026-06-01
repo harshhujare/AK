@@ -3,15 +3,17 @@
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutDashboard, Megaphone, BookOpen, FileText, Users } from 'lucide-react';
+import { LayoutDashboard, Megaphone, BookOpen, FileText, Users, LifeBuoy, HelpCircle } from 'lucide-react';
 import useAuthStore from '@/lib/auth-store';
 
 const NAV_ITEMS = [
-  { href: '/admin', label: 'Dashboard', icon: <LayoutDashboard size={18} />, exact: true },
-  { href: '/admin/announcements', label: 'Announcements', icon: <Megaphone size={18} />, exact: false },
-  { href: '/admin/subjects', label: 'Subjects', icon: <BookOpen size={18} />, exact: false },
-  { href: '/admin/notes', label: 'Notes', icon: <FileText size={18} />, exact: false },
-  { href: '/admin/users', label: 'Users', icon: <Users size={18} />, exact: false },
+  { href: '/admin', label: 'Dashboard', icon: <LayoutDashboard size={18} />, exact: true, roles: ['SUPER_ADMIN', 'CONTENT_MANAGER'] },
+  { href: '/admin/support', label: 'Support Inbox', icon: <LifeBuoy size={18} />, exact: true, roles: ['SUPER_ADMIN', 'CONTENT_MANAGER', 'SUPPORT_MANAGER'] },
+  { href: '/admin/support/faqs', label: 'Manage FAQs', icon: <HelpCircle size={18} />, exact: false, roles: ['SUPER_ADMIN', 'CONTENT_MANAGER', 'SUPPORT_MANAGER'] },
+  { href: '/admin/announcements', label: 'Announcements', icon: <Megaphone size={18} />, exact: false, roles: ['SUPER_ADMIN', 'CONTENT_MANAGER'] },
+  { href: '/admin/subjects', label: 'Subjects', icon: <BookOpen size={18} />, exact: false, roles: ['SUPER_ADMIN', 'CONTENT_MANAGER'] },
+  { href: '/admin/notes', label: 'Notes', icon: <FileText size={18} />, exact: false, roles: ['SUPER_ADMIN', 'CONTENT_MANAGER'] },
+  { href: '/admin/users', label: 'Users', icon: <Users size={18} />, exact: false, roles: ['SUPER_ADMIN'] },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -26,10 +28,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (!isInitialized) return;
     if (!user) { router.replace('/login'); return; }
-    if (user.role !== 'SUPER_ADMIN' && user.role !== 'CONTENT_MANAGER') {
+    
+    const validRoles = ['SUPER_ADMIN', 'CONTENT_MANAGER', 'SUPPORT_MANAGER'];
+    if (!validRoles.includes(user.role)) {
       router.replace('/');
+      return;
     }
-  }, [user, isInitialized, router]);
+
+    if (user.role === 'SUPPORT_MANAGER' && pathname === '/admin') {
+      router.replace('/admin/support');
+    }
+  }, [user, isInitialized, router, pathname]);
 
   if (!isInitialized || !user) {
     return (
@@ -39,7 +48,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  if (user.role !== 'SUPER_ADMIN' && user.role !== 'CONTENT_MANAGER') {
+  const validRoles = ['SUPER_ADMIN', 'CONTENT_MANAGER', 'SUPPORT_MANAGER'];
+  if (!validRoles.includes(user.role)) {
     return null;
   }
 
@@ -57,8 +67,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         <nav className="admin-nav">
           {NAV_ITEMS.map((item) => {
-            // Users page is SUPER_ADMIN only
-            if (item.href === '/admin/users' && user.role !== 'SUPER_ADMIN') return null;
+            if (!item.roles.includes(user.role)) return null;
             return (
               <Link
                 key={item.href}
@@ -75,7 +84,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="admin-sidebar-footer">
           <Link href="/" className="admin-back-link">← Back to site</Link>
           <div className="admin-user-chip">
-            <span className="admin-user-role">{user.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Content Manager'}</span>
+            <span className="admin-user-role">
+              {user.role === 'SUPER_ADMIN' ? 'Super Admin' : user.role === 'CONTENT_MANAGER' ? 'Content Manager' : 'Support Team'}
+            </span>
             <span className="admin-user-name">{user.name}</span>
           </div>
         </div>
@@ -84,7 +95,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Mobile bottom tab bar */}
       <nav className="admin-bottombar">
         {NAV_ITEMS.map((item) => {
-          if (item.href === '/admin/users' && user.role !== 'SUPER_ADMIN') return null;
+          if (!item.roles.includes(user.role)) return null;
           return (
             <Link
               key={item.href}
