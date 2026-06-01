@@ -69,6 +69,7 @@ export default function Navbar() {
           <div className="navbar-links" role="list">
             <Link href="/#notes" className="navbar-link" role="listitem">Notes</Link>
             <Link href="/#about" className="navbar-link" role="listitem">About</Link>
+            <Link href="/help" className="navbar-link" role="listitem">Help</Link>
           </div>
 
           {/* Desktop auth actions */}
@@ -128,7 +129,7 @@ export default function Navbar() {
                       <p className="navbar-dropdown-email">{user.email}</p>
                     </div>
                     <div className="navbar-dropdown-divider" />
-                    {(user.role === 'SUPER_ADMIN' || user.role === 'CONTENT_MANAGER') && (
+                    {(user.role === 'SUPER_ADMIN' || user.role === 'CONTENT_MANAGER' || user.role === 'SUPPORT_MANAGER') && (
                       <Link href="/admin" className="navbar-dropdown-item" role="menuitem"
                         onClick={() => setDropdownOpen(false)}>
                         Admin Panel
@@ -180,6 +181,7 @@ export default function Navbar() {
             <nav className="mobile-menu-links">
               <Link href="/#notes" className="mobile-menu-link">Notes</Link>
               <Link href="/#about" className="mobile-menu-link">About</Link>
+              <Link href="/help" className="mobile-menu-link">Help Center</Link>
             </nav>
 
             <div className="mobile-menu-footer">
@@ -203,7 +205,7 @@ export default function Navbar() {
                       <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{user.email}</p>
                     </div>
                   </div>
-                  {(user.role === 'SUPER_ADMIN' || user.role === 'CONTENT_MANAGER') && (
+                  {(user.role === 'SUPER_ADMIN' || user.role === 'CONTENT_MANAGER' || user.role === 'SUPPORT_MANAGER') && (
                     <Link href="/admin" className="mobile-menu-action-btn">Admin Panel</Link>
                   )}
                   <button id="mobile-logout-button" className="mobile-menu-action-btn mobile-menu-action-btn--danger"

@@ -82,16 +82,61 @@ export function requireAuth(roles?: Role[], plan?: Plan) {
   };
 }
 
-/**
- * requireAdmin — shorthand for SUPER_ADMIN or CONTENT_MANAGER
- */
-export function requireAdmin() {
-  return requireAuth(['SUPER_ADMIN', 'CONTENT_MANAGER']);
+export const ROLE_LEVEL: Record<Role, number> = {
+  STUDENT: 0,
+  SUPPORT_MANAGER: 1,
+  CONTENT_MANAGER: 2,
+  SUPER_ADMIN: 3,
+};
+
+export function requireRole(minimum: Role) {
+  return [
+    requireAuth(),
+    async (req: Request, res: Response, next: NextFunction) => {
+      if (!req.user) {
+        res.status(401).json({ error: 'Unauthorised' });
+        return;
+      }
+
+      try {
+        // Always read the live role from DB — prevents stale JWT after role changes
+        const freshUser = await prisma.user.findUnique({
+          where: { id: req.user.userId },
+          select: { role: true },
+        });
+
+        if (!freshUser) {
+          res.status(401).json({ error: 'User not found' });
+          return;
+        }
+
+        // Sync the in-request role with the DB truth
+        req.user.role = freshUser.role as Role;
+      } catch {
+        // If DB lookup fails, fall back to the JWT role (best-effort)
+      }                                                                                                        
+
+      if (ROLE_LEVEL[req.user.role] < ROLE_LEVEL[minimum]) {
+        res.status(403).json({ error: 'Forbidden' });
+        return;
+      }
+
+      next();
+    }
+  ];
 }
 
-/**
- * requireSuperAdmin — shorthand for SUPER_ADMIN only
- */
+export function requireSupport() {
+  return requireRole('SUPPORT_MANAGER');
+}
+export function requireContentManager() {
+  return requireRole('CONTENT_MANAGER');
+}
 export function requireSuperAdmin() {
-  return requireAuth(['SUPER_ADMIN']);
+  return requireRole('SUPER_ADMIN');
+}
+
+// For backwards compatibility on routes that use requireAdmin()
+export function requireAdmin() {
+  return requireRole('CONTENT_MANAGER');
 }

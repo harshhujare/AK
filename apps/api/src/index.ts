@@ -8,6 +8,8 @@ import { paymentsRouter } from './routes/payments';
 import { adminRouter } from './routes/admin';
 import { subjectsRouter } from './routes/subjects';
 import { announcementsRouter } from './routes/announcements';
+import { supportRouter } from './routes/support';
+import { faqsRouter } from './routes/faqs';
 import { errorHandler } from './middleware/error';
 
 const app = express();
@@ -49,6 +51,8 @@ app.use('/api/notes', notesRouter);
 app.use('/api/announcements', announcementsRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/support', supportRouter);
+app.use('/api/faqs', faqsRouter);
 
 // ─── Error handler ────────────────────────────────────────────────────────────
 app.use(errorHandler);

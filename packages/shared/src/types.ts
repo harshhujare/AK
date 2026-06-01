@@ -1,8 +1,10 @@
 // ─── Enums ────────────────────────────────────────────────────────────────────
-export type Role = 'STUDENT' | 'CONTENT_MANAGER' | 'SUPER_ADMIN';
+export type Role = 'STUDENT' | 'SUPPORT_MANAGER' | 'CONTENT_MANAGER' | 'SUPER_ADMIN';
 export type Plan = 'FREE' | 'PAID';
 export type PaymentStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED';
 export type AnnouncementType = 'TEXT' | 'VIDEO';
+export type TicketType = 'BUG_REPORT' | 'PAYMENT_ISSUE' | 'CONTENT_QUERY' | 'GENERAL';
+export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
 
 // ─── Core Models ─────────────────────────────────────────────────────────────
 export interface User {
@@ -133,7 +135,7 @@ export interface JwtPayload {
 }
 
 // ─── Role helpers ─────────────────────────────────────────────────────────────
-export const ADMIN_ROLES: Role[] = ['SUPER_ADMIN', 'CONTENT_MANAGER'];
+export const ADMIN_ROLES: Role[] = ['SUPER_ADMIN', 'CONTENT_MANAGER', 'SUPPORT_MANAGER'];
 export const isAdmin = (role: Role) => ADMIN_ROLES.includes(role);
 export const isSuperAdmin = (role: Role) => role === 'SUPER_ADMIN';
 
