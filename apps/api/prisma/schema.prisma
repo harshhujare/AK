@@ -14,6 +14,7 @@ datasource db {
 
 enum Role {
   STUDENT
+  SUPPORT_MANAGER
   CONTENT_MANAGER
   SUPER_ADMIN
 }
@@ -48,9 +49,11 @@ model User {
   planExpiresAt DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
-  attempts      TestAttempt[]
-  payments      Payment[]
-  noteViews     NoteView[]
+  attempts       TestAttempt[]
+  payments       Payment[]
+  noteViews      NoteView[]
+  supportTickets SupportTicket[]
+  ticketReplies  TicketReply[]
 }
 
 model Subject {
@@ -151,4 +154,69 @@ model Payment {
   status            PaymentStatus @default(PENDING)
   planDuration      Int           // days (e.g. 30, 180, 365)
   createdAt         DateTime      @default(now())
+}
+
+// ─── Help Center & Support ───────────────────────────────────────────────────
+
+model FAQ {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String
+  category  String
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@index([isActive])
+}
+
+enum TicketType {
+  BUG_REPORT
+  PAYMENT_ISSUE
+  CONTENT_QUERY
+  GENERAL
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+model SupportTicket {
+  id        String        @id @default(cuid())
+  type      TicketType
+  status    TicketStatus  @default(OPEN)
+  subject   String
+  message   String
+
+  paymentId String?
+  orderId   String?
+
+  userId    String
+  user      User          @relation(fields: [userId], references: [id])
+  replies   TicketReply[]
+
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([type])
+}
+
+model TicketReply {
+  id           String        @id @default(cuid())
+  message      String
+  isStaffReply Boolean       @default(false)
+
+  ticketId     String
+  ticket       SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  authorId     String
+  author       User          @relation(fields: [authorId], references: [id])
+
+  createdAt    DateTime      @default(now())
 }

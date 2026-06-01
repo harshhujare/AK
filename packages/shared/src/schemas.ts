@@ -78,6 +78,27 @@ export const CreateSubjectSchema = z.object({
   order: z.number().int().min(0).optional().default(0),
 });
 
+// ─── Support & Help Center ────────────────────────────────────────────────────
+export const CreateTicketSchema = z.object({
+  type: z.enum(['BUG_REPORT', 'PAYMENT_ISSUE', 'CONTENT_QUERY', 'GENERAL']).default('GENERAL'),
+  subject: z.string().min(5).max(100),
+  message: z.string().min(10).max(2000),
+});
+
+export const ReplyTicketSchema = z.object({
+  message: z.string().min(1).max(2000),
+});
+
+export const CreateFAQSchema = z.object({
+  question: z.string().min(5),
+  answer: z.string().min(5),
+  category: z.string().min(2),
+  order: z.number().int().default(0),
+  isActive: z.boolean().default(true),
+});
+
+export const UpdateFAQSchema = CreateFAQSchema.partial();
+
 // ─── Inferred types ───────────────────────────────────────────────────────────
 export type RegisterInput = z.infer<typeof RegisterSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
@@ -91,3 +112,7 @@ export type CreateOrderInput = z.infer<typeof CreateOrderSchema>;
 export type VerifyPaymentInput = z.infer<typeof VerifyPaymentSchema>;
 export type UpdateUserPlanInput = z.infer<typeof UpdateUserPlanSchema>;
 export type CreateSubjectInput = z.infer<typeof CreateSubjectSchema>;
+export type CreateTicketInput = z.infer<typeof CreateTicketSchema>;
+export type ReplyTicketInput = z.infer<typeof ReplyTicketSchema>;
+export type CreateFAQInput = z.infer<typeof CreateFAQSchema>;
+export type UpdateFAQInput = z.infer<typeof UpdateFAQSchema>;
