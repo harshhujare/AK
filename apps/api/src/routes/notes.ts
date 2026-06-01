@@ -62,6 +62,14 @@ notesRouter.get('/:id/stream', requireAuth(), asyncHandler(async (req: Request, 
     return;
   }
 
+  if (note.isPaid) {
+    const { role, plan } = req.user!;
+    if (role !== 'SUPER_ADMIN' && role !== 'CONTENT_MANAGER' && plan !== 'PAID') {
+      res.status(403).json({ error: 'This note requires a paid subscription' });
+      return;
+    }
+  }
+
   // Log the view for analytics
   await withRetry(() => prisma.noteView.create({
     data: { userId: req.user!.userId, noteId: note.id },
