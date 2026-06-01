@@ -6,6 +6,7 @@
     "dev": "nodemon",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
+    "start:prod": "prisma migrate deploy && node dist/index.js",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
     "db:migrate": "prisma migrate dev",
