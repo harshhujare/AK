@@ -1,12 +1,12 @@
 'use client';
 
-// useSearchParams() requires opting out of static generation
+// No useSearchParams — avoids the Suspense/prerender requirement.
+// We read the URL directly via window.location (client-only, safe).
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { HelpCircle, Ticket, ArrowLeft, Inbox, Plus } from 'lucide-react';
+import { HelpCircle, Ticket, Inbox, Plus } from 'lucide-react';
 import FAQSection from '@/components/help/FAQSection';
 import ContactForm from '@/components/help/ContactForm';
 import TicketCard from '@/components/help/TicketCard';
@@ -20,11 +20,21 @@ interface FAQ {
 }
 
 export default function HelpCenterPage() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
   const { user, isInitialized, initialize } = useAuthStore();
 
-  const activeTab: Tab = searchParams.get('tab') === 'tickets' ? 'tickets' : 'help';
+  // Read tab from URL without useSearchParams (avoids Suspense requirement)
+  const [activeTab, setActiveTab] = useState<Tab>('help');
+
+  useEffect(() => {
+    const readTab = () => {
+      const params = new URLSearchParams(window.location.search);
+      setActiveTab(params.get('tab') === 'tickets' ? 'tickets' : 'help');
+    };
+    readTab();
+    // Keep in sync with browser back/forward
+    window.addEventListener('popstate', readTab);
+    return () => window.removeEventListener('popstate', readTab);
+  }, []);
 
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [tickets, setTickets] = useState<any[]>([]);
@@ -61,7 +71,8 @@ export default function HelpCenterPage() {
 
   const setTab = (tab: Tab) => {
     const url = tab === 'tickets' ? '/help?tab=tickets' : '/help';
-    router.push(url, { scroll: false });
+    window.history.pushState({}, '', url);
+    setActiveTab(tab);
   };
 
   return (
