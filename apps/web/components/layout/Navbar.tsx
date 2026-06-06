@@ -67,6 +67,7 @@ export default function Navbar() {
 
           {/* Desktop nav links */}
           <div className="navbar-links" role="list">
+            <Link href="/pricing" className="navbar-link" role="listitem" style={{ color: 'var(--accent)', fontWeight: 600 }}>Pricing</Link>
             <Link href="/#notes" className="navbar-link" role="listitem">Notes</Link>
             <Link href="/#about" className="navbar-link" role="listitem">About</Link>
             <Link href="/help" className="navbar-link" role="listitem">Help</Link>
@@ -179,6 +180,7 @@ export default function Navbar() {
             </div>
 
             <nav className="mobile-menu-links">
+              <Link href="/pricing" className="mobile-menu-link" style={{ color: 'var(--accent)', fontWeight: 600 }}>Pricing</Link>
               <Link href="/#notes" className="mobile-menu-link">Notes</Link>
               <Link href="/#about" className="mobile-menu-link">About</Link>
               <Link href="/help" className="mobile-menu-link">Help Center</Link>

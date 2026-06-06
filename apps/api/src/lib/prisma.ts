@@ -30,22 +30,33 @@ if (process.env.NODE_ENV !== 'production') {
   global.__prisma = prisma;
 }
 
-/**
- * withRetry — wraps a Prisma operation and retries once on Neon cold-start errors.
- * Neon wakes from scale-to-zero in ~2-4s; one retry is enough to handle this.
- */
-export async function withRetry<T>(fn: () => Promise<T>, attempts = 2): Promise<T> {
+export function isTransientDatabaseError(err: unknown): boolean {
+  if (err instanceof Prisma.PrismaClientInitializationError) return true;
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    return ['P1001', 'P1002', 'P2024'].includes(err.code);
+  }
+
+  if (!(err instanceof Error)) return false;
+
+  return [
+    "Can't reach database server",
+    'Timed out fetching a new connection',
+    'Connection terminated',
+    'connection timed out',
+    'ECONNRESET',
+    'ETIMEDOUT',
+  ].some((message) => err.message.includes(message));
+}
+
+export async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
   for (let i = 0; i < attempts; i++) {
     try {
       return await fn();
     } catch (err) {
-      const isNeonColdStart =
-        err instanceof Prisma.PrismaClientInitializationError ||
-        (err instanceof Error && err.message.includes("Can't reach database server"));
-
-      if (isNeonColdStart && i < attempts - 1) {
-        console.warn(`[DB] Neon cold-start detected, retrying in 3s… (attempt ${i + 1}/${attempts})`);
-        await new Promise(r => setTimeout(r, 3000));
+      if (isTransientDatabaseError(err) && i < attempts - 1) {
+        const delayMs = 1500 * (i + 1);
+        console.warn(`[DB] Transient database connection error, retrying in ${delayMs}ms (attempt ${i + 1}/${attempts})`);
+        await new Promise(r => setTimeout(r, delayMs));
         continue;
       }
       throw err;
@@ -53,4 +64,3 @@ export async function withRetry<T>(fn: () => Promise<T>, attempts = 2): Promise<
   }
   throw new Error('withRetry: exhausted all attempts');
 }
-

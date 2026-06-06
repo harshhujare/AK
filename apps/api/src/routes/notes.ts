@@ -37,6 +37,7 @@ notesRouter.get('/', asyncHandler(async (req: Request, res: Response) => {
         title: true,
         description: true,
         isPaid: true,
+        accessType: true,
         pageCount: true,
         createdAt: true,
         updatedAt: true,
@@ -60,6 +61,33 @@ notesRouter.get('/:id/stream', requireAuth(), asyncHandler(async (req: Request, 
   if (!note) {
     res.status(404).json({ error: 'Note not found' });
     return;
+  }
+
+  if (note.isPaid) {
+    const { role, plan } = req.user!;
+    const isAdmin = role === 'SUPER_ADMIN' || role === 'CONTENT_MANAGER';
+
+    if (!isAdmin) {
+      if (note.accessType === 'LIFETIME') {
+        // LIFETIME notes: check if the user has ever paid (paidAt is set permanently)
+        const dbUser = await withRetry(() =>
+          prisma.user.findUnique({
+            where: { id: req.user!.userId },
+            select: { paidAt: true },
+          })
+        );
+        if (!dbUser?.paidAt) {
+          res.status(403).json({ error: 'This note requires a paid subscription' });
+          return;
+        }
+      } else {
+        // TIMED notes: active paid plan required
+        if (plan !== 'PAID') {
+          res.status(403).json({ error: 'This note requires an active paid subscription' });
+          return;
+        }
+      }
+    }
   }
 
   // Log the view for analytics
@@ -132,6 +160,7 @@ notesRouter.post(
         description: parsed.data.description,
         subjectId: parsed.data.subjectId,
         isPaid: parsed.data.isPaid,
+        accessType: (parsed.data as any).accessType ?? 'TIMED',
         fileKey,
         thumbnailKey,
       },
@@ -144,6 +173,7 @@ notesRouter.post(
         description: note.description,
         subjectId: note.subjectId,
         isPaid: note.isPaid,
+        accessType: note.accessType,
         pageCount: note.pageCount,
         createdAt: note.createdAt,
         // fileKey NOT returned
@@ -161,7 +191,7 @@ notesRouter.patch('/:id', requireAdmin(), asyncHandler(async (req: Request, res:
     return;
   }
 
-  const { title, description, subjectId, isPaid, pageCount } = req.body;
+  const { title, description, subjectId, isPaid, accessType, pageCount } = req.body;
   const updated = await prisma.note.update({
     where: { id },
     data: {
@@ -169,6 +199,7 @@ notesRouter.patch('/:id', requireAdmin(), asyncHandler(async (req: Request, res:
       ...(description !== undefined && { description }),
       ...(subjectId && { subjectId }),
       ...(isPaid !== undefined && { isPaid }),
+      ...(accessType !== undefined && { accessType }),
       ...(pageCount !== undefined && { pageCount }),
     },
   });
@@ -180,6 +211,7 @@ notesRouter.patch('/:id', requireAdmin(), asyncHandler(async (req: Request, res:
       description: updated.description,
       subjectId: updated.subjectId,
       isPaid: updated.isPaid,
+      accessType: updated.accessType,
       pageCount: updated.pageCount,
       createdAt: updated.createdAt,
     },

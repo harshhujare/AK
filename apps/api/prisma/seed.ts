@@ -108,6 +108,21 @@ async function main() {
   });
 
   console.log('✅ Sample test created:', test.title);
+
+  // ── Plan config — initial pricing (₹499 for 30-day / lifetime premium access)
+  await prisma.planConfig.upsert({
+    where: { planDuration: 30 },
+    update: {},  // never overwrite — admin may have changed the price
+    create: {
+      planDuration: 30,
+      price: 49900,  // ₹499 in paise
+      label: 'Premium Access',
+      description: 'Unlock all premium handwritten notes by Ajit Sir. Get instant access to chapter-wise PDFs, bilingual explanations, and exclusive TET study material.',
+      isActive: true,
+    },
+  });
+
+  console.log('✅ PlanConfig seeded: ₹499 / 30-day plan');
   console.log('\n🎉 Seed complete!');
   console.log('   Admin: admin@ajitsir.com / Admin@1234');
   console.log('   Student: student@ajitsir.com / Student@1234');

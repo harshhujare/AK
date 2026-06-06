@@ -2,68 +2,146 @@
 
 import type { NoteWithSubject } from '@/hooks/useNotes';
 import { useRouter } from 'next/navigation';
+import type { User } from '@ajitsir/shared';
+import PaywallBanner from '../payment/PaywallBanner';
+import { canAccessNote } from '@/features/payment/utils/accessControl';
+
+// ─── Sub-component: Sign-in overlay ──────────────────────────────────────────
+
+interface SignInOverlayProps {
+  noteId: string;
+}
+
+/**
+ * Rendered when `note.isPaid === true` and the user is not authenticated.
+ * Redirects to /login with a callbackUrl back to the notes section.
+ */
+function SignInOverlay({ noteId }: SignInOverlayProps) {
+  const router = useRouter();
+  return (
+    <div className="paywall-banner" role="region" aria-label="Sign in required">
+      <svg
+        width="28"
+        height="28"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        className="paywall-icon"
+        aria-hidden="true"
+      >
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </svg>
+      <p className="paywall-text">Sign in to access this note</p>
+      <button
+        className="paywall-btn"
+        onClick={(e) => {
+          e.stopPropagation();
+          router.push(`/login?callbackUrl=/#notes`);
+        }}
+        aria-label="Log in to access this premium note"
+      >
+        Log in
+      </button>
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 interface NoteCardProps {
   note: NoteWithSubject;
-  isAuthenticated: boolean;
+  user: User | null;
   onClick: (note: NoteWithSubject) => void;
 }
 
-export default function NoteCard({ note, isAuthenticated, onClick }: NoteCardProps) {
-  const router = useRouter();
+/**
+ * NoteCard
+ *
+ * Displays a single note with access gating based on the Phase 3 access matrix:
+ *
+ * | note.isPaid | user       | Behaviour                              |
+ * |-------------|------------|----------------------------------------|
+ * | false       | any        | Open viewer                            |
+ * | true        | null       | SignInOverlay (→ /login)               |
+ * | true        | SUPER_ADMIN / CONTENT_MANAGER | Open viewer         |
+ * | true        | PAID (active) | Open viewer                         |
+ * | true        | FREE / expired | PaywallBanner (→ /pricing)          |
+ *
+ * Access logic is delegated to `canAccessNote()` which is independently
+ * unit-tested in `accessControl.test.ts`.
+ */
+export default function NoteCard({ note, user, onClick }: NoteCardProps) {
+  const hasAccess = canAccessNote(user, note);
+
+  const handleClick = () => {
+    if (hasAccess) {
+      onClick(note);
+    }
+  };
+
+  // Determine which overlay to show for locked paid notes
+  const lockOverlay = !hasAccess
+    ? !user
+      ? <SignInOverlay noteId={note.id} />
+      : <PaywallBanner />
+    : null;
+
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
   const thumbnailUrl = `${API_URL}/api/notes/${note.id}/thumbnail`;
 
-  const handleClick = () => {
-    if (!isAuthenticated) {
-      router.push(`/login?callbackUrl=/#notes`);
-      return;
-    }
-    onClick(note);
-  };
-
   return (
-    <div className="note-card" onClick={handleClick} role="button" tabIndex={0}>
+    <div
+      className={`note-card${!hasAccess ? ' note-card--locked' : ''}`}
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && hasAccess) {
+          e.preventDefault();
+          onClick(note);
+        }
+      }}
+      aria-label={`${note.title}${note.isPaid ? ' — Premium' : ''}${!hasAccess ? ' (locked)' : ''}`}
+    >
+      {/* ── Thumbnail + Access Overlay ─────────────────────────────── */}
       <div className="note-card-image-container">
-        <img 
-          src={thumbnailUrl} 
+        <img
+          src={thumbnailUrl}
           alt={`Cover for ${note.title}`}
           className="note-thumbnail"
           onError={(e) => {
-            // Fallback if no thumbnail is available
             (e.target as HTMLImageElement).style.display = 'none';
             (e.target as HTMLImageElement).parentElement!.classList.add('no-thumbnail');
           }}
         />
+        {lockOverlay}
       </div>
+
+      {/* ── Card Body ──────────────────────────────────────────────── */}
       <div className="note-card-inner">
         <div className="note-subject">
           <span className="subject-badge">{note.subject.name}</span>
-          {!isAuthenticated && (
-            <span className="lock-icon" title="Login required" aria-label="Login required">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-              </svg>
-            </span>
-          )}
+          {note.isPaid && <span className="paid-badge">PREMIUM</span>}
         </div>
-        
+
         <h3 className="note-title font-serif">{note.title}</h3>
         {note.description && <p className="note-desc">{note.description}</p>}
-        
+
         <div className="note-footer">
           <span className="note-pages">{note.pageCount || '?'} pages</span>
           <span className="note-date">
             {new Date(note.createdAt).toLocaleDateString('en-IN', {
               day: 'numeric',
               month: 'short',
-              year: 'numeric'
+              year: 'numeric',
             })}
           </span>
         </div>
       </div>
 
+      {/* ── Styles ─────────────────────────────────────────────────── */}
       <style>{`
         .note-card {
           background: var(--bg-surface-2);
@@ -80,6 +158,14 @@ export default function NoteCard({ note, isAuthenticated, onClick }: NoteCardPro
           transform: translateY(-2px);
           background: var(--bg-hover);
           border-color: var(--border-strong);
+        }
+        /* Locked cards get a not-allowed cursor on the card itself,
+           but the overlay buttons restore pointer via their own styles. */
+        .note-card--locked {
+          cursor: default;
+        }
+        .note-card--locked:hover {
+          transform: none;
         }
         .note-card-image-container {
           width: 100%;
@@ -129,8 +215,14 @@ export default function NoteCard({ note, isAuthenticated, onClick }: NoteCardPro
           padding: 0.25rem 0.5rem;
           border-radius: 6px;
         }
-        .lock-icon {
-          color: var(--text-muted);
+        .paid-badge {
+          font-size: 0.65rem;
+          font-weight: 700;
+          letter-spacing: 0.05em;
+          color: var(--accent-text);
+          background: var(--accent-bg);
+          padding: 0.25rem 0.5rem;
+          border-radius: 6px;
         }
         .note-title {
           font-size: 1.25rem;

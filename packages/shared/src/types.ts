@@ -5,6 +5,7 @@ export type PaymentStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED';
 export type AnnouncementType = 'TEXT' | 'VIDEO';
 export type TicketType = 'BUG_REPORT' | 'PAYMENT_ISSUE' | 'CONTENT_QUERY' | 'GENERAL';
 export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
+export type NoteAccessType = 'TIMED' | 'LIFETIME';
 
 // ─── Core Models ─────────────────────────────────────────────────────────────
 export interface User {
@@ -15,6 +16,7 @@ export interface User {
   role: Role;
   plan: Plan;
   planExpiresAt: string | null;
+  paidAt: string | null;        // ISO string — set once on first payment, never cleared
   createdAt: string;
 }
 
@@ -88,6 +90,7 @@ export interface Note {
   subjectId: string;
   subject?: Subject;
   isPaid: boolean;
+  accessType: NoteAccessType; // TIMED = expires with plan; LIFETIME = permanent once paid
   pageCount?: number;
   thumbnailKey?: string;
   createdAt: string;

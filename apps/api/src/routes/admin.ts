@@ -141,3 +141,140 @@ adminRouter.patch('/users/:id/role', requireSuperAdmin(), async (req: Request, r
 
   res.json({ data: user });
 });
+
+// ─── Payment Management Endpoints ────────────────────────────────────────────
+
+// GET /api/admin/payments/stats — revenue & payment stats (detailed)
+adminRouter.get('/payments/stats', async (_req: Request, res: Response) => {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+  const [
+    totalRevenue,
+    revenueThisMonth,
+    revenueLastMonth,
+    totalPaidUsers,
+    totalPayments,
+    successPayments,
+    failedPayments,
+    pendingPayments,
+  ] = await withRetry(() => Promise.all([
+    prisma.payment.aggregate({ where: { status: 'SUCCESS' }, _sum: { amount: true } }),
+    prisma.payment.aggregate({ where: { status: 'SUCCESS', createdAt: { gte: startOfMonth } }, _sum: { amount: true } }),
+    prisma.payment.aggregate({ where: { status: 'SUCCESS', createdAt: { gte: startOfLastMonth, lte: endOfLastMonth } }, _sum: { amount: true } }),
+    prisma.user.count({ where: { plan: 'PAID' } }),
+    prisma.payment.count(),
+    prisma.payment.count({ where: { status: 'SUCCESS' } }),
+    prisma.payment.count({ where: { status: 'FAILED' } }),
+    prisma.payment.count({ where: { status: 'PENDING' } }),
+  ]));
+
+  const totalRevenuePaise = totalRevenue._sum.amount || 0;
+  const successRate = totalPayments > 0
+    ? ((successPayments / totalPayments) * 100).toFixed(1)
+    : '0.0';
+
+  res.json({
+    data: {
+      totalRevenuePaise,
+      totalRevenueRupees: (totalRevenuePaise / 100).toFixed(2),
+      revenueThisMonthPaise: revenueThisMonth._sum.amount || 0,
+      revenueThisMonthRupees: ((revenueThisMonth._sum.amount || 0) / 100).toFixed(2),
+      revenueLastMonthPaise: revenueLastMonth._sum.amount || 0,
+      revenueLastMonthRupees: ((revenueLastMonth._sum.amount || 0) / 100).toFixed(2),
+      totalPaidUsers,
+      totalPayments,
+      successPayments,
+      failedPayments,
+      pendingPayments,
+      successRate,
+    },
+  });
+});
+
+// GET /api/admin/payments?page=1&limit=20&status=&search=
+adminRouter.get('/payments', async (req: Request, res: Response) => {
+  const page = Math.max(1, parseInt(req.query.page as string) || 1);
+  const limit = Math.min(100, parseInt(req.query.limit as string) || 20);
+  const status = req.query.status as string | undefined;
+  const search = (req.query.search as string) || '';
+
+  const where: any = {};
+
+  if (status && ['PENDING', 'SUCCESS', 'FAILED', 'REFUNDED'].includes(status)) {
+    where.status = status;
+  }
+
+  if (search) {
+    where.OR = [
+      { razorpayOrderId: { contains: search, mode: 'insensitive' } },
+      { user: { name: { contains: search, mode: 'insensitive' } } },
+      { user: { email: { contains: search, mode: 'insensitive' } } },
+    ];
+  }
+
+  const [payments, total] = await withRetry(() => Promise.all([
+    prisma.payment.findMany({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        razorpayOrderId: true,
+        razorpayPaymentId: true,
+        amount: true,
+        status: true,
+        planDuration: true,
+        createdAt: true,
+        user: { select: { id: true, name: true, email: true } },
+      },
+    }),
+    prisma.payment.count({ where }),
+  ]));
+
+  res.json({
+    data: { payments, total, page, limit, totalPages: Math.ceil(total / limit) },
+  });
+});
+
+// GET /api/admin/plan-config — get current plan configuration
+adminRouter.get('/plan-config', async (_req: Request, res: Response) => {
+  const configs = await withRetry(() => prisma.planConfig.findMany({
+    orderBy: { planDuration: 'asc' },
+  }));
+  res.json({ data: configs });
+});
+
+// PATCH /api/admin/plan-config/:planDuration — update plan price (SUPER_ADMIN only)
+adminRouter.patch('/plan-config/:planDuration', requireSuperAdmin(), async (req: Request, res: Response) => {
+  const planDuration = parseInt(String(req.params.planDuration));
+  const { price, label, description, isActive } = req.body;
+
+  if (price !== undefined && (typeof price !== 'number' || price < 100)) {
+    res.status(400).json({ error: 'price must be a number >= 100 (paise). Minimum ₹1.' });
+    return;
+  }
+
+  const config = await withRetry(() => prisma.planConfig.upsert({
+    where: { planDuration },
+    create: {
+      planDuration,
+      price: price ?? 49900,
+      label: label ?? 'Premium Access',
+      description: description ?? null,
+      isActive: isActive ?? true,
+    },
+    update: {
+      ...(price !== undefined && { price }),
+      ...(label !== undefined && { label }),
+      ...(description !== undefined && { description }),
+      ...(isActive !== undefined && { isActive }),
+    },
+  }));
+
+  res.json({ data: config });
+});
+

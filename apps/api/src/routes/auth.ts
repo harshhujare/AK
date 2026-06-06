@@ -1,10 +1,21 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import { prisma, withRetry } from '../lib/prisma';
-import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../services/token';
+import { isTransientDatabaseError, prisma, withRetry } from '../lib/prisma';
+import { signAccessToken, signRefreshToken, verifyAccessToken, verifyRefreshToken } from '../services/token';
 import { verifyGoogleIdToken } from '../services/google';
 import { RegisterSchema, LoginSchema, GoogleAuthSchema } from '@ajitsir/shared';
 import { asyncHandler } from '../lib/asyncHandler';
+
+async function checkAndDowngradePlan<T extends { id: string; plan: string; planExpiresAt: Date | null }>(user: T): Promise<T> {
+  if (user.plan === 'PAID' && user.planExpiresAt && user.planExpiresAt < new Date()) {
+    await withRetry(() => prisma.user.update({
+      where: { id: user.id },
+      data: { plan: 'FREE' }
+    }));
+    return { ...user, plan: 'FREE' };
+  }
+  return user;
+}
 
 export const authRouter = Router();
 
@@ -28,6 +39,13 @@ const CLEAR_COOKIE_OPTS = {
   path: COOKIE_OPTS.path,
 };
 
+function sendDatabaseWakingResponse(res: Response) {
+  res.status(503).json({
+    error: 'Database is waking up. Please retry shortly.',
+    code: 'DATABASE_WAKING',
+  });
+}
+
 // POST /api/auth/register
 authRouter.post('/register', asyncHandler(async (req: Request, res: Response) => {
   const parsed = RegisterSchema.safeParse(req.body);
@@ -37,16 +55,16 @@ authRouter.post('/register', asyncHandler(async (req: Request, res: Response) =>
   }
   const { name, email, password } = parsed.data;
 
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const existing = await withRetry(() => prisma.user.findUnique({ where: { email } }));
   if (existing) {
     res.status(409).json({ error: 'Email already registered' });
     return;
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
-  const user = await prisma.user.create({
+  const user = await withRetry(() => prisma.user.create({
     data: { name, email, passwordHash },
-  });
+  }));
 
   const accessToken = signAccessToken({ userId: user.id, role: user.role, plan: user.plan });
   const refreshToken = signRefreshToken(user.id);
@@ -66,7 +84,7 @@ authRouter.post('/login', asyncHandler(async (req: Request, res: Response) => {
   }
   const { email, password } = parsed.data;
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  let user = await withRetry(() => prisma.user.findUnique({ where: { email } }));
   if (!user || !user.passwordHash) {
     res.status(401).json({ error: 'Invalid email or password' });
     return;
@@ -77,6 +95,8 @@ authRouter.post('/login', asyncHandler(async (req: Request, res: Response) => {
     res.status(401).json({ error: 'Invalid email or password' });
     return;
   }
+
+  user = await checkAndDowngradePlan(user);
 
   const accessToken = signAccessToken({ userId: user.id, role: user.role, plan: user.plan });
   const refreshToken = signRefreshToken(user.id);
@@ -104,7 +124,7 @@ authRouter.post('/google', asyncHandler(async (req: Request, res: Response) => {
   }
 
   // Upsert user — create if first time, find if returning
-  const user = await withRetry(() => prisma.user.upsert({
+  let user = await withRetry(() => prisma.user.upsert({
     where: { googleId: googleUser.googleId },
     update: { name: googleUser.name },
     create: {
@@ -113,6 +133,8 @@ authRouter.post('/google', asyncHandler(async (req: Request, res: Response) => {
       googleId: googleUser.googleId,
     },
   }));
+
+  user = await checkAndDowngradePlan(user);
 
   const accessToken = signAccessToken({ userId: user.id, role: user.role, plan: user.plan });
   const refreshToken = signRefreshToken(user.id);
@@ -131,18 +153,31 @@ authRouter.post('/refresh', asyncHandler(async (req: Request, res: Response) => 
     return;
   }
 
+  let userId: string;
   try {
-    const { userId } = verifyRefreshToken(token);
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    ({ userId } = verifyRefreshToken(token));
+  } catch {
+    res.status(401).json({ error: 'Invalid or expired refresh token' });
+    return;
+  }
+
+  try {
+    let user = await withRetry(() => prisma.user.findUnique({ where: { id: userId } }));
     if (!user) {
       res.status(401).json({ error: 'User not found' });
       return;
     }
 
+    user = await checkAndDowngradePlan(user);
+
     const accessToken = signAccessToken({ userId: user.id, role: user.role, plan: user.plan });
     res.json({ data: { accessToken } });
-  } catch {
-    res.status(401).json({ error: 'Invalid or expired refresh token' });
+  } catch (error) {
+    if (isTransientDatabaseError(error)) {
+      sendDatabaseWakingResponse(res);
+      return;
+    }
+    throw error;
   }
 }));
 
@@ -159,19 +194,31 @@ authRouter.get('/me', asyncHandler(async (req: Request, res: Response) => {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
-  const { verifyAccessToken } = await import('../services/token');
+
+  let payload: ReturnType<typeof verifyAccessToken>;
   try {
-    const payload = verifyAccessToken(authHeader.slice(7));
-    const user = await prisma.user.findUnique({
+    payload = verifyAccessToken(authHeader.slice(7));
+  } catch {
+    res.status(401).json({ error: 'Invalid token' });
+    return;
+  }
+
+  try {
+    let user = await withRetry(() => prisma.user.findUnique({
       where: { id: payload.userId },
       select: { id: true, name: true, email: true, role: true, plan: true, planExpiresAt: true, createdAt: true },
-    });
+    }));
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
     }
+    user = await checkAndDowngradePlan(user);
     res.json({ data: { ...user, userId: user.id } });
-  } catch {
-    res.status(401).json({ error: 'Invalid token' });
+  } catch (error) {
+    if (isTransientDatabaseError(error)) {
+      sendDatabaseWakingResponse(res);
+      return;
+    }
+    throw error;
   }
 }));

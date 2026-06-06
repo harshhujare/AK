@@ -11,6 +11,7 @@ import { announcementsRouter } from './routes/announcements';
 import { supportRouter } from './routes/support';
 import { faqsRouter } from './routes/faqs';
 import { errorHandler } from './middleware/error';
+import { captureRawBody } from './middleware/rawBody';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -35,6 +36,13 @@ app.use(cors({
   },
   credentials: true,
 }));
+
+// ─── Webhook raw body capture ──────────────────────────────────────────────────
+// Must be registered BEFORE express.json() so the raw bytes are preserved.
+// Razorpay computes HMAC over the exact bytes it sent; re-serializing with
+// JSON.stringify after parsing would produce a different string → HMAC mismatch.
+app.use('/api/payments/webhook', captureRawBody);
+
 app.use(express.json());
 app.use(cookieParser());
 
