@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import useAuthStore from '@/lib/auth-store';
 import {
@@ -19,7 +19,7 @@ type PageState =
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function PaymentSuccessPage() {
+function PaymentSuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isInitialized } = useAuthStore();
@@ -158,6 +158,20 @@ export default function PaymentSuccessPage() {
       <style>{pageStyles}</style>
       <style>{loaderStyles}</style>
     </div>
+  );
+}
+
+export default function PaymentSuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="success-page">
+        <div className="success-loader" aria-label="Loading…" role="status">
+          <div className="loader-ring" />
+        </div>
+      </div>
+    }>
+      <PaymentSuccessContent />
+    </Suspense>
   );
 }
 
