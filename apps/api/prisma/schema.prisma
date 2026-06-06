@@ -178,7 +178,6 @@ model PlanConfig {
 
   @@map("plan_config")
 }
-
 // ─── Help Center & Support ───────────────────────────────────────────────────
 
 model FAQ {
