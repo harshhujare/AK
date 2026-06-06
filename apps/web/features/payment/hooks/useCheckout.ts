@@ -1,9 +1,13 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import useAuthStore from '@/lib/auth-store';
 import { createOrderAPI, verifyPaymentAPI } from '../services/api';
 import { loadRazorpayScript, RazorpayOptions, RazorpayResponse } from '../utils/razorpay';
 import { pollForPlanUpgrade } from '../utils/polling';
+import { planDurationToLabel } from '../utils/successPageUtils';
+
+/** Valid plan durations accepted by the API (days). */
+export type PlanDuration = '30' | '180' | '365';
 
 export type CheckoutState =
   | { status: 'idle' }
@@ -20,8 +24,17 @@ export function useCheckout() {
   const [state, setState] = useState<CheckoutState>({ status: 'idle' });
   const { user, accessToken, refresh } = useAuthStore();
   const router = useRouter();
+  // Ref to the background UPI poll — keeps the interval ID across renders
+  const upiPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const checkout = useCallback(async (planDuration: '365' = '365') => {
+  const clearUpiPoll = () => {
+    if (upiPollRef.current) {
+      clearInterval(upiPollRef.current);
+      upiPollRef.current = null;
+    }
+  };
+
+  const checkout = useCallback(async (planDuration: PlanDuration = '365') => {
     if (!user || !accessToken) {
       // Save intent and redirect to login
       sessionStorage.setItem('pendingPlanCheckout', planDuration);
@@ -64,8 +77,9 @@ export function useCheckout() {
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySignature: response.razorpay_signature,
             }, accessToken);
-            
-            await proceedToSuccess();
+
+            clearUpiPoll(); // cancel background UPI poll — normal flow succeeded
+            await proceedToSuccess(planDuration);
           } catch (verifyError: any) {
             if (verifyError.message === 'Unauthorized') {
               router.push('/login?callbackUrl=/pricing');
@@ -80,7 +94,7 @@ export function useCheckout() {
               const upgraded = await pollForPlanUpgrade(() => useAuthStore.getState().accessToken || '');
               
               if (upgraded) {
-                await proceedToSuccess();
+                await proceedToSuccess(planDuration);
               } else {
                 setState({ status: 'error', message: 'Payment verification timed out. If money was deducted, it will be automatically refunded or credited. Contact support with order ID: ' + orderData.orderId });
               }
@@ -92,14 +106,35 @@ export function useCheckout() {
         },
         modal: {
           ondismiss: () => {
+            clearUpiPoll(); // cancel background UPI poll
             setState({ status: 'cancelled' });
-            // In a real UI we might toast here or just let the UI handle the state
           }
         }
       };
 
       setState({ status: 'awaiting_payment' });
-      
+
+      // Start a background poll for Android UPI redirect flow:
+      // On some UPI apps Razorpay switches to a full-page redirect and the
+      // handler callback never fires. This poll detects the plan upgrade
+      // when the user comes back to the page.
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      upiPollRef.current = setInterval(async () => {
+        const token = useAuthStore.getState().accessToken || '';
+        if (!token) return;
+        try {
+          const res = await fetch(`${API_URL}/api/auth/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) return;
+          const body = await res.json();
+          if (body.data?.plan === 'PAID') {
+            clearUpiPoll();
+            await proceedToSuccess(planDuration);
+          }
+        } catch { /* network error — keep polling */ }
+      }, 5000);
+
       const rzp = new (window as any).Razorpay(options);
       rzp.on('payment.failed', function (response: any) {
         // This is handled by razorpay UI itself, but we can catch it
@@ -118,18 +153,22 @@ export function useCheckout() {
     }
   }, [user, accessToken, router, refresh]);
 
-  // Step 4 helper
-  const proceedToSuccess = async () => {
+  // Step 4 helper — receives the planDuration that was purchased so the
+  // success page URL carries the correct human-readable label.
+  const proceedToSuccess = async (planDuration: PlanDuration) => {
     setState({ status: 'refreshing_token' });
     try {
       await refresh();
       // Wait a tick for Zustand to update its state
       await new Promise(r => setTimeout(r, 100));
-      
+
       const freshUser = useAuthStore.getState().user;
-      
+      const planLabel = planDurationToLabel(parseInt(planDuration, 10));
+
       setState({ status: 'success' });
-      router.push(`/payment/success?plan=Annual&expires=${freshUser?.planExpiresAt || ''}`);
+      router.push(
+        `/payment/success?plan=${encodeURIComponent(planLabel)}&expires=${encodeURIComponent(freshUser?.planExpiresAt || '')}`
+      );
     } catch (refreshError) {
       setState({ status: 'error', message: 'Payment confirmed! Please refresh the page to unlock your notes.' });
     }

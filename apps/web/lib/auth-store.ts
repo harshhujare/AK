@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { User } from '@ajitsir/shared';
-import apiClient from './api-client';
+import apiClient, { isTransientAuthError } from './api-client';
 import { pdfCacheClearAll } from './pdf-cache';
 
 interface AuthState {
@@ -16,6 +16,22 @@ interface AuthState {
   setAccessToken: (accessToken: string) => void;
   refresh: () => Promise<void>;
 }
+
+const readStoredSession = () => {
+  if (typeof window === 'undefined') return null;
+
+  const accessToken = localStorage.getItem('accessToken');
+  const storedUser = localStorage.getItem('user');
+  if (!accessToken || !storedUser) return null;
+
+  try {
+    return { accessToken, user: JSON.parse(storedUser) as User };
+  } catch {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('user');
+    return null;
+  }
+};
 
 const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
@@ -74,7 +90,11 @@ const useAuthStore = create<AuthState>((set, get) => ({
             set({ user: data.data, isLoading: false, isInitialized: true });
             localStorage.setItem('user', JSON.stringify(data.data));
             return;
-          } catch {
+          } catch (error) {
+            if (isTransientAuthError(error)) {
+              set({ isLoading: false, isInitialized: true });
+              return;
+            }
             // Token invalid — try refresh (interceptor handles it)
           }
         }
@@ -82,7 +102,11 @@ const useAuthStore = create<AuthState>((set, get) => ({
         // Try silent refresh via httpOnly cookie
         try {
           await get().refresh();
-        } catch {
+        } catch (error) {
+          if (isTransientAuthError(error)) {
+            set({ isLoading: false, isInitialized: true });
+            return;
+          }
           // No valid session — user needs to log in
           localStorage.removeItem('accessToken');
           localStorage.removeItem('user');

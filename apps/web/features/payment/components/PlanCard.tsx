@@ -6,6 +6,7 @@ export interface PlanData {
   price: string;
   period: string;
   badge?: string;
+  description?: string;  // optional override for the plan card body text
 }
 
 interface PlanCardProps {
@@ -30,7 +31,8 @@ export default function PlanCard({ plan, isLoading, disabled, onSelect, statusTe
       </div>
 
       <p className="plan-desc">
-        Get unlimited access to all premium TET study notes, chapter-wise PDFs, and exclusive content curated by Ajit Sir for {plan.period}.
+        {plan.description ||
+          `Get unlimited access to all premium TET study notes, chapter-wise PDFs, and exclusive content curated by Ajit Sir for ${plan.period}.`}
       </p>
 
       <ul className="plan-features">

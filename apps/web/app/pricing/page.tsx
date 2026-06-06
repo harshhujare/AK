@@ -1,60 +1,127 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import useAuthStore from '@/lib/auth-store';
-import { useCheckout } from '@/features/payment/hooks/useCheckout';
+import { useCheckout, type PlanDuration } from '@/features/payment/hooks/useCheckout';
 import PlanCard, { type PlanData } from '@/features/payment/components/PlanCard';
+import { useQuery } from '@tanstack/react-query';
+import apiClient from '@/lib/api-client';
 
+// Single plan — ₹499 gives access to ALL premium handwritten notes by Ajit Sir.
+// Backend supports multiple durations; additional plans can be added here in future.
 const PLANS: readonly PlanData[] = [
-  { duration: 30,  label: 'Monthly',  price: '₹499',   period: '30 days'   },
-  { duration: 180, label: '6-Month',  price: '₹2,499', period: '180 days', badge: 'Best value' },
-  { duration: 365, label: 'Annual',   price: '₹3,999', period: '365 days'  },
+  {
+    duration: 30,
+    label: 'Premium Access',
+    price: '₹499',
+    period: 'All premium notes',
+    badge: 'Best Value',
+    description: 'Unlock all premium handwritten notes by Ajit Sir. Chapter-wise PDFs, bilingual explanations, and complete TET study material — all in one plan.',
+  },
 ] as const;
 
 export default function PricingPage() {
   const { user, isInitialized } = useAuthStore();
   const { state: checkoutState, checkout } = useCheckout();
 
-  // Show a loading skeleton or nothing while checking auth state on first load
-  if (!isInitialized) {
+  // Fetch live pricing from backend
+  const { data: serverPlans, isLoading: isPlansLoading } = useQuery({
+    queryKey: ['public-plan-config'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<{ data: { planDuration: number, price: number, label: string, description: string | null }[] }>('/api/payments/plan-config');
+      return data.data;
+    },
+  });
+
+  const displayPlans: readonly PlanData[] = serverPlans && serverPlans.length > 0
+    ? serverPlans.map(p => ({
+        duration: p.planDuration as 30 | 180 | 365,
+        label: p.label,
+        price: `₹${p.price / 100}`,
+        period: 'All premium notes',
+        badge: 'Best Value',
+        description: p.description || undefined,
+      }))
+    : PLANS;
+
+  // ── Neon cold-start UX — escalate message after 3s so users know it hasn't frozen
+  const [coldStartMsg, setColdStartMsg] = useState('Preparing your order…');
+  useEffect(() => {
+    if (checkoutState.status !== 'creating_order') {
+      setColdStartMsg('Preparing your order…'); // reset for next time
+      return;
+    }
+    const t = setTimeout(() => setColdStartMsg('Almost there… waking up the server'), 3000);
+    return () => clearTimeout(t);
+  }, [checkoutState.status]);
+
+  // ── Session restore — auto-resume checkout if user was redirected to login ──
+  useEffect(() => {
+    if (!isInitialized || !user) return;
+    
+    // We must check if user is paid inside the effect to avoid hook dependency issues
+    const isPaid = user.plan === 'PAID';
+    const planExpiresAt = user.planExpiresAt ? new Date(user.planExpiresAt) : null;
+    const isExpired = planExpiresAt ? planExpiresAt < new Date() : false;
+    const isActivePaid = isPaid && !isExpired;
+    
+    if (isActivePaid) return;
+    
+    const pending = sessionStorage.getItem('pendingPlanCheckout') as PlanDuration | null;
+    if (pending && (['30', '180', '365'] as string[]).includes(pending)) {
+      sessionStorage.removeItem('pendingPlanCheckout'); // clear BEFORE calling checkout to avoid loops
+      checkout(pending);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInitialized, user]);
+
+  // Show a loading skeleton while checking auth state on first load
+  if (!isInitialized || isPlansLoading) {
     return (
       <div className="pricing-page">
         <div className="pricing-header">
           <h1 className="pricing-title font-serif">Upgrade to Premium</h1>
-          <p className="pricing-subtitle">Unlock unlimited access to all study materials.</p>
+          <p className="pricing-subtitle">One plan. All of Ajit Sir's handwritten notes.</p>
         </div>
         <div className="pricing-container" style={{ opacity: 0.5 }}>
           <div className="plans-grid">
-            {PLANS.map((plan) => (
-              <PlanCard key={plan.duration} plan={plan} isLoading={true} disabled={true} onSelect={() => {}} />
-            ))}
+            <PlanCard 
+              key={30} 
+              plan={{
+                duration: 30,
+                label: 'Premium Access',
+                price: '...',
+                period: 'Loading...',
+              }} 
+              isLoading={true} 
+              disabled={true} 
+              onSelect={() => {}} 
+            />
           </div>
         </div>
       </div>
     );
   }
 
-  // Derive display status
-  let statusText: string | undefined;
-  if (checkoutState.status === 'creating_order') statusText = 'Initializing...';
-  if (checkoutState.status === 'awaiting_payment') statusText = 'Complete payment...';
-  if (checkoutState.status === 'verifying') statusText = 'Verifying...';
-  if (checkoutState.status === 'polling') statusText = 'Confirming...';
-  if (checkoutState.status === 'refreshing_token') statusText = 'Unlocking notes...';
-  
-  if (!user) {
-    statusText = 'Login to Subscribe';
-  }
-
-  const isCheckoutActive = 
-    checkoutState.status !== 'idle' && 
-    checkoutState.status !== 'error' && 
-    checkoutState.status !== 'cancelled';
-
   const isPaid = user?.plan === 'PAID';
   const planExpiresAt = user?.planExpiresAt ? new Date(user.planExpiresAt) : null;
   const isExpired = planExpiresAt ? planExpiresAt < new Date() : false;
   const isActivePaid = isPaid && !isExpired;
+
+  // Derive display status
+  let statusText: string | undefined;
+  if (checkoutState.status === 'creating_order') statusText = coldStartMsg;
+  if (checkoutState.status === 'awaiting_payment') statusText = 'Complete payment…';
+  if (checkoutState.status === 'verifying') statusText = 'Verifying…';
+  if (checkoutState.status === 'polling') statusText = 'Confirming…';
+  if (checkoutState.status === 'refreshing_token') statusText = 'Unlocking notes…';
+  if (!user) statusText = 'Login to Subscribe';
+  if (isActivePaid) statusText = 'Plan Active — Purchase after expiry';
+
+  const isCheckoutActive =
+    checkoutState.status !== 'idle' &&
+    checkoutState.status !== 'error' &&
+    checkoutState.status !== 'cancelled';
 
   return (
     <div className="pricing-page">
@@ -87,14 +154,14 @@ export default function PricingPage() {
         )}
 
         <div className="plans-grid">
-          {PLANS.map((plan) => (
-            <PlanCard 
+          {displayPlans.map((plan) => (
+            <PlanCard
               key={plan.duration}
               plan={plan}
-              isLoading={isCheckoutActive}
-              disabled={isCheckoutActive}
-              statusText={statusText || (isActivePaid ? 'Renew Subscription' : undefined)}
-              onSelect={(duration) => checkout(duration.toString() as any)}
+              isLoading={checkoutState.status === 'creating_order'}
+              disabled={isCheckoutActive || isActivePaid}
+              statusText={statusText || (isActivePaid ? undefined : undefined)}
+              onSelect={(duration) => checkout(duration.toString() as PlanDuration)}
             />
           ))}
         </div>

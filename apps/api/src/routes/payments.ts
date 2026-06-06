@@ -14,14 +14,21 @@ paymentsRouter.use((_req: Request, res: Response, next: NextFunction) => {
   }
   next();
 });
+// GET /api/payments/plan-config — Publicly available pricing info
+paymentsRouter.get('/plan-config', async (_req: Request, res: Response) => {
+  const configs = await prisma.planConfig.findMany({
+    where: { isActive: true },
+    orderBy: { planDuration: 'asc' },
+    select: {
+      planDuration: true,
+      price: true,
+      label: true,
+      description: true,
+    }
+  });
+  res.json({ data: configs });
+});
 
-
-// Plan pricing config (paise)
-const PLAN_PRICING: Record<string, number> = {
-  '30': 49900,   // ₹499
-  '180': 249900, // ₹2,499
-  '365': 399900, // ₹3,999
-};
 
 // POST /api/payments/create-order
 paymentsRouter.post('/create-order', requireAuth(), async (req: Request, res: Response) => {
@@ -31,12 +38,34 @@ paymentsRouter.post('/create-order', requireAuth(), async (req: Request, res: Re
     return;
   }
 
-  const planDuration = parseInt(parsed.data.planDuration);
-  const amount = PLAN_PRICING[parsed.data.planDuration];
-  if (!amount) {
-    res.status(400).json({ error: 'Invalid plan duration' });
+  // Block mid-plan purchase — user cannot buy again while their plan is active
+  const currentUser = await prisma.user.findUnique({
+    where: { id: req.user!.userId },
+    select: { plan: true, planExpiresAt: true },
+  });
+  if (
+    currentUser?.plan === 'PAID' &&
+    currentUser.planExpiresAt &&
+    currentUser.planExpiresAt > new Date()
+  ) {
+    res.status(409).json({
+      error: 'You already have an active plan. You can purchase again after it expires.',
+      planExpiresAt: currentUser.planExpiresAt,
+    });
     return;
   }
+
+  const planDuration = parseInt(parsed.data.planDuration);
+
+  // ── Fetch price from DB (admin-configurable) ──────────────────────────────
+  const planConfig = await prisma.planConfig.findFirst({
+    where: { planDuration, isActive: true },
+  });
+  if (!planConfig) {
+    res.status(400).json({ error: 'Invalid plan duration or plan is not available' });
+    return;
+  }
+  const { price: amount, label: planLabel } = planConfig;
 
   // Idempotency: return existing PENDING order if created within the last 30 minutes
   const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
@@ -84,6 +113,7 @@ paymentsRouter.post('/create-order', requireAuth(), async (req: Request, res: Re
       amount: order.amount,
       currency: order.currency,
       keyId: process.env.RAZORPAY_KEY_ID,
+      planLabel,   // forward label so frontend can show correct plan name on success page
     },
   });
 });
@@ -118,9 +148,15 @@ paymentsRouter.post('/verify', requireAuth(), async (req: Request, res: Response
     return;
   }
 
-  // Upgrade plan
+  // Calculate expiry from today (no stacking — user cannot buy while plan is active)
   const planExpiresAt = new Date();
   planExpiresAt.setDate(planExpiresAt.getDate() + payment.planDuration);
+
+  // Fetch current paidAt to avoid overwriting an earlier timestamp
+  const existingUser = await prisma.user.findUnique({
+    where: { id: req.user!.userId },
+    select: { paidAt: true },
+  });
 
   await prisma.$transaction([
     prisma.payment.update({
@@ -129,7 +165,12 @@ paymentsRouter.post('/verify', requireAuth(), async (req: Request, res: Response
     }),
     prisma.user.update({
       where: { id: req.user!.userId },
-      data: { plan: 'PAID', planExpiresAt },
+      data: {
+        plan: 'PAID',
+        planExpiresAt,
+        // paidAt: set once on first payment, never overwritten
+        ...(existingUser?.paidAt == null && { paidAt: new Date() }),
+      },
     }),
   ]);
 
@@ -137,6 +178,8 @@ paymentsRouter.post('/verify', requireAuth(), async (req: Request, res: Response
 });
 
 // POST /api/payments/webhook — Razorpay async events
+// Note: req.rawBody is populated by captureRawBody middleware (registered in index.ts)
+// before express.json() so the HMAC is computed over the original bytes Razorpay sent.
 paymentsRouter.post('/webhook', async (req: Request, res: Response) => {
   const signature = req.headers['x-razorpay-signature'] as string;
   if (!signature) {
@@ -144,7 +187,8 @@ paymentsRouter.post('/webhook', async (req: Request, res: Response) => {
     return;
   }
 
-  const rawBody = JSON.stringify(req.body);
+  // Use raw bytes for HMAC — never re-serialize the parsed JSON object
+  const rawBody = req.rawBody?.toString('utf8') ?? JSON.stringify(req.body);
   const valid = verifyWebhookSignature(rawBody, signature);
   if (!valid) {
     res.status(400).json({ error: 'Invalid webhook signature' });
@@ -152,16 +196,24 @@ paymentsRouter.post('/webhook', async (req: Request, res: Response) => {
   }
 
   const event = req.body.event;
-  const orderId = req.body.payload?.payment?.entity?.order_id;
+  // payment.captured fires for card/wallet; order.paid fires for UPI/net-banking
+  const orderId = req.body.payload?.payment?.entity?.order_id
+    ?? req.body.payload?.order?.entity?.id;
 
-  if (event === 'payment.captured' && orderId) {
+  if ((event === 'payment.captured' || event === 'order.paid') && orderId) {
     const payment = await prisma.payment.findUnique({ where: { razorpayOrderId: orderId } });
-    
+
     // Idempotency: only apply if PENDING
     if (payment && payment.status === 'PENDING') {
       const planExpiresAt = new Date();
       planExpiresAt.setDate(planExpiresAt.getDate() + payment.planDuration);
-      
+
+      // Fetch current paidAt to avoid overwriting an earlier timestamp
+      const existingUser = await prisma.user.findUnique({
+        where: { id: payment.userId },
+        select: { paidAt: true },
+      });
+
       await prisma.$transaction([
         prisma.payment.update({
           where: { razorpayOrderId: orderId },
@@ -169,7 +221,12 @@ paymentsRouter.post('/webhook', async (req: Request, res: Response) => {
         }),
         prisma.user.update({
           where: { id: payment.userId },
-          data: { plan: 'PAID', planExpiresAt },
+          data: {
+            plan: 'PAID',
+            planExpiresAt,
+            // paidAt: set once on first payment, never overwritten
+            ...(existingUser?.paidAt == null && { paidAt: new Date() }),
+          },
         }),
       ]);
     }

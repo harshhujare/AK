@@ -36,6 +36,11 @@ enum AnnouncementType {
   VIDEO
 }
 
+enum NoteAccessType {
+  TIMED     // access expires with user's planExpiresAt
+  LIFETIME  // access granted forever once user has ever successfully paid
+}
+
 // ─── Models ────────────────────────────────────────────────────────────────────
 
 model User {
@@ -47,6 +52,7 @@ model User {
   role          Role          @default(STUDENT)
   plan          Plan          @default(FREE)
   planExpiresAt DateTime?
+  paidAt        DateTime?     // set once on first successful payment, never cleared
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   attempts       TestAttempt[]
@@ -103,17 +109,18 @@ model TestAttempt {
 }
 
 model Note {
-  id           String     @id @default(cuid())
+  id           String         @id @default(cuid())
   title        String
   description  String?
   subjectId    String
-  subject      Subject    @relation(fields: [subjectId], references: [id])
-  fileKey      String     // AWS S3 object key — NEVER expose to client
-  isPaid       Boolean    @default(false)
+  subject      Subject        @relation(fields: [subjectId], references: [id])
+  fileKey      String         // AWS S3 object key — NEVER expose to client
+  isPaid       Boolean        @default(false)
+  accessType   NoteAccessType @default(TIMED) // TIMED = expires with plan; LIFETIME = permanent once paid
   pageCount    Int?
-  thumbnailKey String?    // S3 key of thumbnail image (optional)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  thumbnailKey String?        // S3 key of thumbnail image (optional)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
   views        NoteView[]
 
   @@index([subjectId])
@@ -154,6 +161,22 @@ model Payment {
   status            PaymentStatus @default(PENDING)
   planDuration      Int           // days (e.g. 30, 180, 365)
   createdAt         DateTime      @default(now())
+}
+
+// Stores admin-configurable pricing for each plan duration.
+// Supports multiple plans in future (one record per planDuration).
+// Currently only one active record: 30 days = ₹499.
+model PlanConfig {
+  id           String   @id @default(cuid())
+  planDuration Int      @unique  // days: 30 | 180 | 365
+  price        Int               // price in paise (e.g. 49900 = ₹499)
+  label        String            // display name (e.g. "Premium Access")
+  description  String?           // optional marketing copy shown on pricing page
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("plan_config")
 }
 
 // ─── Help Center & Support ───────────────────────────────────────────────────

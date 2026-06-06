@@ -1,4 +1,5 @@
 import type { VerifyPaymentInput } from '@ajitsir/shared';
+import type { PlanDuration } from '../hooks/useCheckout';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -23,7 +24,7 @@ interface VerifyPaymentResponse {
  * Uses AbortController to support timeouts for cold starts.
  */
 export async function createOrderAPI(
-  planDuration: '365', 
+  planDuration: PlanDuration,
   token: string
 ): Promise<CreateOrderResponse> {
   const controller = new AbortController();

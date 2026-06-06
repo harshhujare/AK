@@ -4,6 +4,51 @@ import type { NoteWithSubject } from '@/hooks/useNotes';
 import { useRouter } from 'next/navigation';
 import type { User } from '@ajitsir/shared';
 import PaywallBanner from '../payment/PaywallBanner';
+import { canAccessNote } from '@/features/payment/utils/accessControl';
+
+// ─── Sub-component: Sign-in overlay ──────────────────────────────────────────
+
+interface SignInOverlayProps {
+  noteId: string;
+}
+
+/**
+ * Rendered when `note.isPaid === true` and the user is not authenticated.
+ * Redirects to /login with a callbackUrl back to the notes section.
+ */
+function SignInOverlay({ noteId }: SignInOverlayProps) {
+  const router = useRouter();
+  return (
+    <div className="paywall-banner" role="region" aria-label="Sign in required">
+      <svg
+        width="28"
+        height="28"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        className="paywall-icon"
+        aria-hidden="true"
+      >
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </svg>
+      <p className="paywall-text">Sign in to access this note</p>
+      <button
+        className="paywall-btn"
+        onClick={(e) => {
+          e.stopPropagation();
+          router.push(`/login?callbackUrl=/#notes`);
+        }}
+        aria-label="Log in to access this premium note"
+      >
+        Log in
+      </button>
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 interface NoteCardProps {
   note: NoteWithSubject;
@@ -11,17 +56,24 @@ interface NoteCardProps {
   onClick: (note: NoteWithSubject) => void;
 }
 
+/**
+ * NoteCard
+ *
+ * Displays a single note with access gating based on the Phase 3 access matrix:
+ *
+ * | note.isPaid | user       | Behaviour                              |
+ * |-------------|------------|----------------------------------------|
+ * | false       | any        | Open viewer                            |
+ * | true        | null       | SignInOverlay (→ /login)               |
+ * | true        | SUPER_ADMIN / CONTENT_MANAGER | Open viewer         |
+ * | true        | PAID (active) | Open viewer                         |
+ * | true        | FREE / expired | PaywallBanner (→ /pricing)          |
+ *
+ * Access logic is delegated to `canAccessNote()` which is independently
+ * unit-tested in `accessControl.test.ts`.
+ */
 export default function NoteCard({ note, user, onClick }: NoteCardProps) {
-  const router = useRouter();
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-  const thumbnailUrl = `${API_URL}/api/notes/${note.id}/thumbnail`;
-
-  const hasAccess = !note.isPaid || 
-    (user && (
-      user.role === 'SUPER_ADMIN' || 
-      user.role === 'CONTENT_MANAGER' || 
-      (user.plan === 'PAID' && (!user.planExpiresAt || new Date(user.planExpiresAt).getTime() > Date.now()))
-    ));
+  const hasAccess = canAccessNote(user, note);
 
   const handleClick = () => {
     if (hasAccess) {
@@ -29,65 +81,67 @@ export default function NoteCard({ note, user, onClick }: NoteCardProps) {
     }
   };
 
+  // Determine which overlay to show for locked paid notes
+  const lockOverlay = !hasAccess
+    ? !user
+      ? <SignInOverlay noteId={note.id} />
+      : <PaywallBanner />
+    : null;
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+  const thumbnailUrl = `${API_URL}/api/notes/${note.id}/thumbnail`;
+
   return (
-    <div className={`note-card ${!hasAccess ? 'note-card--locked' : ''}`} onClick={handleClick} role="button" tabIndex={0}>
+    <div
+      className={`note-card${!hasAccess ? ' note-card--locked' : ''}`}
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && hasAccess) {
+          e.preventDefault();
+          onClick(note);
+        }
+      }}
+      aria-label={`${note.title}${note.isPaid ? ' — Premium' : ''}${!hasAccess ? ' (locked)' : ''}`}
+    >
+      {/* ── Thumbnail + Access Overlay ─────────────────────────────── */}
       <div className="note-card-image-container">
-        <img 
-          src={thumbnailUrl} 
+        <img
+          src={thumbnailUrl}
           alt={`Cover for ${note.title}`}
           className="note-thumbnail"
           onError={(e) => {
-            // Fallback if no thumbnail is available
             (e.target as HTMLImageElement).style.display = 'none';
             (e.target as HTMLImageElement).parentElement!.classList.add('no-thumbnail');
           }}
         />
-        
-        {/* Access Overlays */}
-        {!hasAccess && (
-          !user ? (
-            <div className="paywall-banner">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="paywall-icon">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-              </svg>
-              <p className="paywall-text">Sign in to access this note</p>
-              <button 
-                className="paywall-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  router.push(`/login?callbackUrl=/#notes`);
-                }}
-              >
-                Log in
-              </button>
-            </div>
-          ) : (
-            <PaywallBanner />
-          )
-        )}
+        {lockOverlay}
       </div>
+
+      {/* ── Card Body ──────────────────────────────────────────────── */}
       <div className="note-card-inner">
         <div className="note-subject">
           <span className="subject-badge">{note.subject.name}</span>
           {note.isPaid && <span className="paid-badge">PREMIUM</span>}
         </div>
-        
+
         <h3 className="note-title font-serif">{note.title}</h3>
         {note.description && <p className="note-desc">{note.description}</p>}
-        
+
         <div className="note-footer">
           <span className="note-pages">{note.pageCount || '?'} pages</span>
           <span className="note-date">
             {new Date(note.createdAt).toLocaleDateString('en-IN', {
               day: 'numeric',
               month: 'short',
-              year: 'numeric'
+              year: 'numeric',
             })}
           </span>
         </div>
       </div>
 
+      {/* ── Styles ─────────────────────────────────────────────────── */}
       <style>{`
         .note-card {
           background: var(--bg-surface-2);
@@ -104,6 +158,14 @@ export default function NoteCard({ note, user, onClick }: NoteCardProps) {
           transform: translateY(-2px);
           background: var(--bg-hover);
           border-color: var(--border-strong);
+        }
+        /* Locked cards get a not-allowed cursor on the card itself,
+           but the overlay buttons restore pointer via their own styles. */
+        .note-card--locked {
+          cursor: default;
+        }
+        .note-card--locked:hover {
+          transform: none;
         }
         .note-card-image-container {
           width: 100%;
@@ -161,46 +223,6 @@ export default function NoteCard({ note, user, onClick }: NoteCardProps) {
           background: var(--accent-bg);
           padding: 0.25rem 0.5rem;
           border-radius: 6px;
-        }
-        /* Lock overlay styles (matching PaywallBanner) */
-        .paywall-banner {
-          position: absolute;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.7);
-          backdrop-filter: blur(4px);
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 0.75rem;
-          color: white;
-          padding: 1rem;
-          text-align: center;
-          z-index: 10;
-        }
-        .paywall-icon {
-          color: var(--accent);
-          opacity: 0.9;
-        }
-        .paywall-text {
-          font-size: 0.85rem;
-          font-weight: 500;
-          line-height: 1.4;
-        }
-        .paywall-btn {
-          background: var(--accent-bg);
-          color: var(--accent-text);
-          border: none;
-          padding: 0.5rem 1rem;
-          border-radius: 6px;
-          font-size: 0.85rem;
-          font-weight: 600;
-          cursor: pointer;
-          transition: opacity 0.2s;
-          margin-top: 0.5rem;
-        }
-        .paywall-btn:hover {
-          opacity: 0.9;
         }
         .note-title {
           font-size: 1.25rem;
