@@ -93,7 +93,9 @@ paymentsRouter.post('/create-order', requireAuth(), async (req: Request, res: Re
 
   const order = await createRazorpayOrder({
     amount,
-    receipt: `rcpt_${req.user!.userId}_${Date.now()}`,
+    // Razorpay max receipt length is 40. CUID is 25 chars.
+    // rcpt (4) + _ (1) + short_uid (8) + _ (1) + timestamp (13) = 27 chars.
+    receipt: `rcpt_${req.user!.userId.substring(0, 8)}_${Date.now()}`,
   });
 
   // Save pending payment record
