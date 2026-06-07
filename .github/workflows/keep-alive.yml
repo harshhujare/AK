@@ -1,0 +1,56 @@
+name: Keep-Alive — Render + Neon
+
+# ─── Why this exists ───────────────────────────────────────────────────────────
+# Render free tier spins down after 15 minutes of no traffic.
+# Neon serverless Postgres suspends compute after ~5 minutes of inactivity.
+# Both cold starts add 15–30 s of latency for the first real user after idle.
+#
+# This workflow pings GET /health every 14 minutes (just under Render's limit).
+# The /health endpoint also runs `SELECT 1` against Neon, keeping both awake.
+# Cost: $0 — GitHub Actions free tier gives 2,000 min/month; this uses ~3,000
+# pings/month × ~5 s each ≈ 250 min/month, well within the free quota.
+# ──────────────────────────────────────────────────────────────────────────────
+
+on:
+  schedule:
+    # Every 14 minutes, 24 hours a day.
+    # Cron syntax: minute hour day-of-month month day-of-week
+    # GitHub cron minimum granularity is 5 min; 14 min = */14 approximation below.
+    # Note: GitHub may delay cron jobs by a few minutes under heavy load — that's fine.
+    - cron: '*/14 * * * *'
+
+  # Allow triggering manually from the Actions tab for debugging
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Ping Render API + Neon DB
+    runs-on: ubuntu-latest
+    timeout-minutes: 2  # fail fast if something hangs
+
+    steps:
+      - name: Ping /health (wakes Render + Neon)
+        env:
+          API_URL: ${{ secrets.RENDER_API_URL }}
+        run: |
+          echo "🏓 Pinging $API_URL/health at $(date -u)"
+
+          # --fail        → exit non-zero on HTTP 4xx/5xx
+          # --max-time 30 → timeout after 30 s (Render cold start can take ~20 s)
+          # --retry 2     → retry twice on network error (not on HTTP errors)
+          # --retry-delay 5 → wait 5 s between retries
+          RESPONSE=$(curl --silent --fail --max-time 30 \
+            --retry 2 --retry-delay 5 \
+            "$API_URL/health")
+
+          echo "✅ Response: $RESPONSE"
+
+          # Parse the db field and warn if Neon didn't respond
+          DB_STATUS=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('db','unknown'))")
+          echo "🗄️  Neon DB status: $DB_STATUS"
+
+          if [ "$DB_STATUS" != "ok" ]; then
+            echo "⚠️  Warning: Neon DB did not respond to SELECT 1 this ping."
+            echo "   It will resume on the next real request or the next ping."
+            # Do NOT exit 1 — this is expected during Neon's own resume window
+          fi

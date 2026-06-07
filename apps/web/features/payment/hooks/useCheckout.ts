@@ -153,24 +153,44 @@ export function useCheckout() {
     }
   }, [user, accessToken, router, refresh]);
 
-  // Step 4 helper — receives the planDuration that was purchased so the
-  // success page URL carries the correct human-readable label.
+  // ─── Step 4 helper ──────────────────────────────────────────────────────────
+  // Guards against concurrent calls (UPI poller + normal handler can both fire).
+  // Polls Zustand until plan is actually 'PAID' before navigating — the fixed
+  // 100ms delay was not enough on slow 4G connections where refresh() calls
+  // /api/auth/refresh + /api/auth/me sequentially (can take 2–4 s on mobile).
+  const proceedingRef = useRef(false);
+
   const proceedToSuccess = async (planDuration: PlanDuration) => {
+    // Prevent double-call from UPI poller + normal handler racing each other
+    if (proceedingRef.current) return;
+    proceedingRef.current = true;
+
     setState({ status: 'refreshing_token' });
     try {
       await refresh();
-      // Wait a tick for Zustand to update its state
-      await new Promise(r => setTimeout(r, 100));
 
-      const freshUser = useAuthStore.getState().user;
+      // Poll Zustand until plan is confirmed as PAID (up to 10 s on slow 4G).
+      // refresh() calls /refresh then /me sequentially — both can be slow on
+      // mobile; the old 100ms setTimeout was not enough on real devices.
+      let freshUser = useAuthStore.getState().user;
+      for (let i = 0; i < 20 && freshUser?.plan !== 'PAID'; i++) {
+        await new Promise(r => setTimeout(r, 500));
+        freshUser = useAuthStore.getState().user;
+      }
+
       const planLabel = planDurationToLabel(parseInt(planDuration, 10));
 
       setState({ status: 'success' });
       router.push(
         `/payment/success?plan=${encodeURIComponent(planLabel)}&expires=${encodeURIComponent(freshUser?.planExpiresAt || '')}`
       );
-    } catch (refreshError) {
-      setState({ status: 'error', message: 'Payment confirmed! Please refresh the page to unlock your notes.' });
+    } catch {
+      setState({
+        status: 'error',
+        message: 'Payment confirmed! Please refresh the page to unlock your notes.',
+      });
+    } finally {
+      proceedingRef.current = false;
     }
   };
 
