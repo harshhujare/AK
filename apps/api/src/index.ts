@@ -12,6 +12,7 @@ import { supportRouter } from './routes/support';
 import { faqsRouter } from './routes/faqs';
 import { errorHandler } from './middleware/error';
 import { captureRawBody } from './middleware/rawBody';
+import { prisma } from './lib/prisma';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -46,9 +47,21 @@ app.use('/api/payments/webhook', captureRawBody);
 app.use(express.json());
 app.use(cookieParser());
 
-// ─── Health check ─────────────────────────────────────────────────────────────
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// ─── Health check (also pings DB to keep Neon awake) ──────────────────────────
+// GET /health
+// Returns { status: 'ok', db: 'ok'|'error', timestamp }
+// A lightweight SELECT 1 is enough to prevent Neon scale-to-zero.
+// The GitHub Actions keep-alive cron hits this endpoint every 14 min.
+app.get('/health', async (_req, res) => {
+  let dbStatus = 'error';
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    dbStatus = 'ok';
+  } catch {
+    // DB unreachable — still return 200 so Render doesn't mark the service unhealthy
+    // (Neon may be in the middle of resuming; the next ping will catch it)
+  }
+  res.json({ status: 'ok', db: dbStatus, timestamp: new Date().toISOString() });
 });
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
