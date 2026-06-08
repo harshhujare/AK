@@ -98,12 +98,15 @@ export function useSecurePdf(note: NoteWithSubject, retryNonce: number) {
           // Fallback: no streaming support (older browsers)
           const buffer = await response.arrayBuffer();
           if (!isMounted) return;
+          
+          await pdfCacheSet(note.id, new Uint8Array(buffer), note.updatedAt);
+          if (!isMounted) return;
+
           setFetchState({ stage: 'parsing' });
           const doc = await pdfjsLib.getDocument({ data: buffer }).promise;
           if (!isMounted) { doc.destroy(); return; }
           pdfDoc = doc;
           setFetchState({ stage: 'ready', doc, numPages: doc.numPages });
-          pdfCacheSet(note.id, new Uint8Array(buffer), note.updatedAt);
           return;
         }
 
@@ -131,7 +134,8 @@ export function useSecurePdf(note: NoteWithSubject, retryNonce: number) {
         }
 
         // ── Step 4: Save to IndexedDB — next open is instant, even offline ──
-        pdfCacheSet(note.id, merged, note.updatedAt);
+        await pdfCacheSet(note.id, merged, note.updatedAt);
+        if (!isMounted) return;
 
         setFetchState({ stage: 'parsing' });
         const doc = await pdfjsLib.getDocument({ data: merged }).promise;
