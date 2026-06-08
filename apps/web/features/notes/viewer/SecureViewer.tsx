@@ -10,7 +10,7 @@ import { PdfErrorState } from './PdfErrorState';
 import { PdfPages } from './PdfPages';
 import './viewer.css';
 
-// Use local worker copy in /public (PDF.js v5 .mjs not on cdnjs yet)
+// Use local worker copy in /public — pdfjs-dist v4.10.38 (broad WebView/in-app browser compatibility)
 if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
   pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 }
@@ -167,7 +167,11 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
         ) : null}
 
         {fetchState.stage === 'error' && (
-          <PdfErrorState message={fetchState.message} onRetry={() => setRetryNonce(n => n + 1)} />
+          <PdfErrorState
+            message={fetchState.message}
+            onRetry={() => setRetryNonce(n => n + 1)}
+            isOffline={fetchState.isOffline}
+          />
         )}
 
         {/* Ready state — lazy page rendering */}

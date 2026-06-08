@@ -9,12 +9,12 @@ export type FetchState =
   | { stage: 'downloading'; downloaded: number; total: number }
   | { stage: 'parsing' }
   | { stage: 'ready'; doc: pdfjsLib.PDFDocumentProxy; numPages: number }
-  | { stage: 'error'; message: string };
+  | { stage: 'error'; message: string; isOffline?: boolean };
 
 export function useSecurePdf(note: NoteWithSubject, retryNonce: number) {
   const [fetchState, setFetchState] = useState<FetchState>({ stage: 'downloading', downloaded: 0, total: 0 });
   const [fromCache, setFromCache] = useState(false);
-  
+
   const { user, accessToken, isInitialized, setAccessToken } = useAuthStore();
 
   useEffect(() => {
@@ -36,7 +36,9 @@ export function useSecurePdf(note: NoteWithSubject, retryNonce: number) {
         setFetchState({ stage: 'downloading', downloaded: 0, total: 0 });
         setFromCache(false);
 
-        // 1. Check IndexedDB cache first
+        // ── Step 1: Always try IndexedDB cache first ────────────────────────
+        // This happens BEFORE any network check, so a cached PDF opens
+        // instantly even with no internet connection.
         const cachedData = await pdfCacheGet(note.id, note.updatedAt);
         if (cachedData) {
           if (!isMounted) return;
@@ -46,10 +48,21 @@ export function useSecurePdf(note: NoteWithSubject, retryNonce: number) {
           pdfDoc = doc;
           setFromCache(true);
           setFetchState({ stage: 'ready', doc, numPages: doc.numPages });
+          return; // done — no network needed
+        }
+
+        // ── Step 2: Cache miss — check connectivity before attempting fetch ─
+        const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+        if (!isOnline) {
+          setFetchState({
+            stage: 'error',
+            message: 'You are offline and this PDF has not been downloaded yet. Connect to the internet to load it for the first time.',
+            isOffline: true,
+          });
           return;
         }
 
-        // 2. Cache miss — stream from server
+        // ── Step 3: Online — stream from server ──────────────────────────────
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
         const fetchPdf = async (token: string | null) => {
           return fetch(`${apiUrl}/api/notes/${note.id}/stream`, {
@@ -85,12 +98,15 @@ export function useSecurePdf(note: NoteWithSubject, retryNonce: number) {
           // Fallback: no streaming support (older browsers)
           const buffer = await response.arrayBuffer();
           if (!isMounted) return;
+          
+          await pdfCacheSet(note.id, new Uint8Array(buffer), note.updatedAt);
+          if (!isMounted) return;
+
           setFetchState({ stage: 'parsing' });
           const doc = await pdfjsLib.getDocument({ data: buffer }).promise;
           if (!isMounted) { doc.destroy(); return; }
           pdfDoc = doc;
           setFetchState({ stage: 'ready', doc, numPages: doc.numPages });
-          pdfCacheSet(note.id, new Uint8Array(buffer), note.updatedAt);
           return;
         }
 
@@ -108,7 +124,7 @@ export function useSecurePdf(note: NoteWithSubject, retryNonce: number) {
 
         if (!isMounted) return;
 
-        // Assemble all chunks into one buffer
+        // Merge chunks
         const totalBytes = chunks.reduce((sum, c) => sum + c.byteLength, 0);
         const merged = new Uint8Array(totalBytes);
         let offset = 0;
@@ -117,19 +133,35 @@ export function useSecurePdf(note: NoteWithSubject, retryNonce: number) {
           offset += chunk.byteLength;
         }
 
-        // 3. Save assembled bytes to cache
-        pdfCacheSet(note.id, merged, note.updatedAt);
+        // ── Step 4: Save to IndexedDB — next open is instant, even offline ──
+        await pdfCacheSet(note.id, merged, note.updatedAt);
+        if (!isMounted) return;
 
         setFetchState({ stage: 'parsing' });
         const doc = await pdfjsLib.getDocument({ data: merged }).promise;
         if (!isMounted) { doc.destroy(); return; }
         pdfDoc = doc;
         setFetchState({ stage: 'ready', doc, numPages: doc.numPages });
+
       } catch (err) {
-        if (isMounted) {
-          const msg = err instanceof Error ? err.message : 'Failed to load document. Please try again.';
-          setFetchState({ stage: 'error', message: msg });
-        }
+        if (!isMounted) return;
+
+        // Distinguish network/offline errors from auth or server errors
+        const isNetworkError =
+          err instanceof TypeError &&
+          (err.message.includes('fetch') ||
+            err.message.includes('network') ||
+            err.message.includes('Failed to fetch'));
+        const isOffline = isNetworkError || (typeof navigator !== 'undefined' && !navigator.onLine);
+
+        const msg = err instanceof Error ? err.message : 'Failed to load document. Please try again.';
+        setFetchState({
+          stage: 'error',
+          message: isOffline
+            ? 'You appear to be offline. Check your connection and try again.'
+            : msg,
+          isOffline,
+        });
       }
     }
 
