@@ -10,26 +10,32 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 5 * 60 * 1000, // 5 minutes
+            // Data is considered fresh for 10 minutes — no background re-fetch within this window.
+            // Previously 5 minutes, which combined with refetchOnWindowFocus caused re-fetches
+            // every time the user switched back to the tab.
+            staleTime: 10 * 60 * 1000,
 
-            // Re-fetch when the user switches back to the tab.
-            // This is the primary fix for the "blank page after 30 min" bug:
-            // queries that failed during Render's cold-start are retried
-            // automatically when the user returns to the tab (by which time
-            // Render has woken up).
-            refetchOnWindowFocus: true,
+            // Keep unused data in memory for 30 minutes (was the 5 min default).
+            // Prevents cache eviction while user is navigating between pages.
+            gcTime: 30 * 60 * 1000,
 
-            // Exponential backoff: 1 s → 2 s → 4 s (3 retries, 4 total attempts).
-            // Render free tier takes up to 15–30 s to wake; the old retry: 1
-            // fired both attempts within seconds, gave up, and left empty state.
-            // Now we wait long enough for Render to actually respond.
+            // DISABLED — was triggering an API call every single time the user
+            // switched back to this tab from any other app. Data fresh 30s ago
+            // does not need re-validation just because focus changed.
+            // Note: `refetchOnReconnect: 'always'` below handles coming back online.
+            refetchOnWindowFocus: false,
+
+            // Re-fetch stale queries when the user comes back online (e.g. reconnects Wi-Fi).
+            refetchOnReconnect: 'always',
+
+            // Exponential backoff for transient failures (cold-start wakeup on Render free tier).
+            // 1 s → 2 s → 4 s — never retry real auth errors (401/403).
             retry: (failureCount, error) => {
-              // Never retry real auth failures (401/403) — only server/network errors
               if (isAuthFailure(error)) return false;
               return failureCount < 3;
             },
             retryDelay: (attempt) =>
-              Math.min(1000 * 2 ** attempt, 15000), // 1 s, 2 s, 4 s, capped at 15 s
+              Math.min(1000 * 2 ** attempt, 15000),
           },
         },
       })
