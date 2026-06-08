@@ -36,7 +36,7 @@ async function main() {
       name: 'Ajit Kambale',
       email: 'admin@ajitsir.com',
       passwordHash: adminHash,
-      role: 'ADMIN',
+      role: 'SUPER_ADMIN',
       plan: 'PAID',
     },
   });
