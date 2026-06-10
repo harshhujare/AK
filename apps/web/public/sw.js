@@ -1,6 +1,6 @@
 // AjitSir Academy — Minimal Service Worker
 // Version: bump SHELL_VERSION when deploying new Next.js build to force cache refresh
-const SHELL_VERSION = 'v1';
+const SHELL_VERSION = 'v2';
 const SHELL_CACHE = `ajitsir-shell-${SHELL_VERSION}`;
 const THUMB_CACHE = 'ajitsir-thumbs-v1';
 const OFFLINE_CACHE = 'ajitsir-offline-v1';
@@ -49,10 +49,19 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Only handle same-origin requests
-  if (url.origin !== self.location.origin) return;
+  // Only handle same-origin requests AND allowed CDNs
+  const isSameOrigin = url.origin === self.location.origin;
+  const isUnpkg = url.hostname === 'unpkg.com';
+  
+  if (!isSameOrigin && !isUnpkg) return;
 
   const pathname = url.pathname;
+
+  // 0. CDN Assets (like pdf.worker.min.mjs) — Cache-First
+  if (isUnpkg) {
+    event.respondWith(cacheFirst(request, SHELL_CACHE));
+    return;
+  }
 
   // 1. NetworkOnly — security-critical routes, never touch cache
   if (NETWORK_ONLY_PATTERNS.some((pattern) => pattern.test(pathname))) {
