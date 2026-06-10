@@ -1,6 +1,6 @@
 // AjitSir Academy — Minimal Service Worker
 // Version: bump SHELL_VERSION when deploying new Next.js build to force cache refresh
-const SHELL_VERSION = 'v2';
+const SHELL_VERSION = 'v3';
 const SHELL_CACHE = `ajitsir-shell-${SHELL_VERSION}`;
 const THUMB_CACHE = 'ajitsir-thumbs-v1';
 const OFFLINE_CACHE = 'ajitsir-offline-v1';
@@ -19,10 +19,13 @@ const NETWORK_ONLY_PATTERNS = [
 // ─── App shell pages to pre-cache on install ─────────────────────────────────
 const SHELL_PAGES = ['/', '/notes', '/plans', '/account', '/help', '/offline.html'];
 
-// ─── Install: cache offline fallback immediately ───────────────────────────────
+// ─── Install: cache offline fallback and shell pages immediately ───────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(OFFLINE_CACHE).then((cache) => cache.add('/offline.html'))
+    Promise.all([
+      caches.open(OFFLINE_CACHE).then((cache) => cache.add('/offline.html')),
+      caches.open(SHELL_CACHE).then((cache) => cache.addAll(SHELL_PAGES))
+    ])
   );
   // Take control immediately — don't wait for old SW to die
   self.skipWaiting();
@@ -157,11 +160,9 @@ async function navigationHandler(request) {
     const cachedPage = await cache.match(request);
     if (cachedPage) return cachedPage;
 
-    // Fall back to cached homepage (Next.js app shell)
-    const home = await cache.match('/');
-    if (home) return home;
-
-    // Last resort — offline.html
+    // Do NOT fall back to `/` (Home) because Next.js HTML is route-specific.
+    // Serving home HTML for `/notes` causes hydration bugs.
+    // Instead, fall back to the dedicated offline page.
     const offline = await caches.match('/offline.html');
     return offline || new Response('You are offline', {
       status: 503,
