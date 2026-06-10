@@ -3,6 +3,24 @@ import type { User } from '@ajitsir/shared';
 import apiClient, { isTransientAuthError } from './api-client';
 import { pdfCacheClearAll } from './pdf-cache';
 
+// ─── Lazy queryClient import ─────────────────────────────────────────────────
+// We import lazily to avoid a circular dep: query-provider → auth-store → query-provider.
+// getQueryClient() is set once by QueryProvider after it creates its client.
+let _clearRQCache: (() => void) | null = null;
+export const registerRQCacheCleaner = (fn: () => void) => { _clearRQCache = fn; };
+
+// ─── JWT token expiry check (client-side only, no signature verification) ────
+// The server still validates the signature on every real request.
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    // exp is in seconds; add a 30s buffer so we refresh slightly early
+    return typeof payload.exp === 'number' && Date.now() / 1000 > payload.exp - 30;
+  } catch {
+    return true; // malformed token → treat as expired
+  }
+}
+
 interface AuthState {
   user: User | null;
   accessToken: string | null;
@@ -62,7 +80,12 @@ const useAuthStore = create<AuthState>((set, get) => ({
     }
     // Wipe cached PDFs — critical for shared/school computers
     await pdfCacheClearAll();
+
+    // Wipe React Query in-memory + persisted cache (Fix 5)
+    // Prevents a logged-out user on a shared device from seeing another user's data
+    if (_clearRQCache) _clearRQCache();
     if (typeof window !== 'undefined') {
+      localStorage.removeItem('rq-cache');
       localStorage.removeItem('accessToken');
       localStorage.removeItem('user');
     }
@@ -72,49 +95,80 @@ const useAuthStore = create<AuthState>((set, get) => ({
   initialize: async () => {
     if (get().isInitialized) return;
 
-    set({ isLoading: true });
+    if (typeof window === 'undefined') {
+      set({ isInitialized: true });
+      return;
+    }
 
-    try {
-      // Restore from localStorage on page load
-      if (typeof window !== 'undefined') {
-        const storedToken = localStorage.getItem('accessToken');
-        const storedUser = localStorage.getItem('user');
+    const stored = readStoredSession();
 
-        if (storedToken && storedUser) {
-          const user = JSON.parse(storedUser) as User;
-          set({ user, accessToken: storedToken });
+    // ── Fix 4: Set isInitialized: true synchronously — no spinner on boot ──
+    if (stored) {
+      // Restore state immediately from localStorage → instant UI, no loading flash
+      set({
+        user: stored.user,
+        accessToken: stored.accessToken,
+        isLoading: false,
+        isInitialized: true,
+      });
 
-          // Verify the token is still valid by hitting /me
-          try {
-            const { data } = await apiClient.get('/api/auth/me');
-            set({ user: data.data, isLoading: false, isInitialized: true });
-            localStorage.setItem('user', JSON.stringify(data.data));
-            return;
-          } catch (error) {
+      // Fire background validation based on token freshness
+      if (isTokenExpired(stored.accessToken)) {
+        // Token expired → try a silent refresh (non-blocking, fire-and-forget)
+        get().refresh().catch((error) => {
+          // ── Offline guard ────────────────────────────────────────────────
+          // If the device is offline, the refresh request fails with ERR_NETWORK.
+          // We must NOT clear the user state in this case — the stored user from
+          // localStorage is still valid and lets the user access cached notes/PDFs.
+          // Only clear the session on a real auth rejection (401/403 from the server).
+          const isOfflineOrTransient =
+            isTransientAuthError(error) ||
+            (typeof navigator !== 'undefined' && !navigator.onLine);
+
+          if (!isOfflineOrTransient) {
+            // Server explicitly rejected the token (401/403) → clear stale session
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('user');
+            set({ user: null, accessToken: null });
+          }
+          // If offline/transient: silently keep the stored user state — the app
+          // stays functional with cached data. The next time the device is online,
+          // the next page load will re-run initialize() and refresh properly.
+        });
+      } else {
+        // Token still valid → fire /me in background to get fresh plan/role data
+        apiClient.get('/api/auth/me')
+          .then(({ data }) => {
+            const freshUser = data.data as User;
+            localStorage.setItem('user', JSON.stringify(freshUser));
+            set({ user: freshUser });
+          })
+          .catch((error) => {
             if (isTransientAuthError(error)) {
-              set({ isLoading: false, isInitialized: true });
+              // Transient error (network/DB wakeup) — keep showing stored user, retry later
               return;
             }
-            // Token invalid — try refresh (interceptor handles it)
-          }
-        }
-
-        // Try silent refresh via httpOnly cookie
-        try {
-          await get().refresh();
-        } catch (error) {
-          if (isTransientAuthError(error)) {
-            set({ isLoading: false, isInitialized: true });
-            return;
-          }
-          // No valid session — user needs to log in
+            // Real auth failure (token rejected server-side) → clear session
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('user');
+            set({ user: null, accessToken: null });
+          });
+      }
+    } else {
+      // No stored session — try a silent refresh via httpOnly cookie
+      try {
+        await get().refresh();
+      } catch (error) {
+        if (isTransientAuthError(error)) {
+          // Transient: keep as logged-out but don't block
+        } else {
           localStorage.removeItem('accessToken');
           localStorage.removeItem('user');
           set({ user: null, accessToken: null });
         }
+      } finally {
+        set({ isInitialized: true });
       }
-    } finally {
-      set({ isLoading: false, isInitialized: true });
     }
   },
 

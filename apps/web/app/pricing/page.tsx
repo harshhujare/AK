@@ -116,7 +116,7 @@ export default function PricingPage() {
   if (checkoutState.status === 'polling') statusText = 'Confirming…';
   if (checkoutState.status === 'refreshing_token') statusText = 'Unlocking notes…';
   if (!user) statusText = 'Login to Subscribe';
-  if (isActivePaid) statusText = 'Plan Active — Purchase after expiry';
+  if (isActivePaid) statusText = 'Plan Active';
 
   const isCheckoutActive =
     checkoutState.status !== 'idle' &&
@@ -137,7 +137,6 @@ export default function PricingPage() {
             <div className="banner-content">
               <strong>You have an active Premium Plan!</strong>
               <p>Your subscription is valid until {planExpiresAt?.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}.</p>
-              <p className="banner-subtext">You can renew early to add another 365 days to your existing expiry date.</p>
             </div>
           </div>
         )}

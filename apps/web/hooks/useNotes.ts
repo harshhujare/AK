@@ -16,6 +16,10 @@ export interface NotesResponse {
 export function useNotes(subjectId?: string | null, page: number = 1, limit: number = 20, search: string = '') {
   return useQuery({
     queryKey: ['notes', subjectId, page, limit, search],
+    // offlineFirst: serve stale cached notes list even when offline,
+    // instead of entering a loading/error state. The RQ localStorage persister
+    // (Phase 3) means the last-fetched notes list is always available.
+    networkMode: 'offlineFirst',
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) });
       if (subjectId) params.set('subjectId', subjectId);

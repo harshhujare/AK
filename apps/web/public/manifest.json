@@ -1,0 +1,17 @@
+{
+  "name": "AjitSir Academy",
+  "short_name": "AjitSir",
+  "description": "Maharashtra TET Exam Preparation and Study Notes",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f13",
+  "theme_color": "#0f0f13",
+  "icons": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -131,7 +131,7 @@ function PaymentSuccessContent() {
         <button
           id="explore-notes-btn"
           className="success-cta"
-          onClick={() => router.push('/#notes')}
+          onClick={() => router.push('/notes')}
           aria-label="Go to study notes"
         >
           Explore notes

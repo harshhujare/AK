@@ -26,7 +26,23 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
   const zoomWrapperRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  const [currentPage, setCurrentPage] = useState(1);
+  const initialPage = useRef<number | null>(null);
+  if (initialPage.current === null) {
+    let p = 1;
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(`lastPage_${note.id}`);
+        if (stored) {
+          const parsed = parseInt(stored, 10);
+          if (!isNaN(parsed) && parsed > 1) p = parsed;
+        }
+      } catch {}
+    }
+    initialPage.current = p;
+  }
+
+  const [currentPage, setCurrentPage] = useState(initialPage.current);
+  const [initialScrollDone, setInitialScrollDone] = useState(initialPage.current === 1);
   const [retryNonce, setRetryNonce] = useState(0);
   const [scale, setScale] = useState(1);
   const [transformOrigin, setTransformOrigin] = useState<string>('top center');
@@ -98,9 +114,32 @@ export default function SecureViewer({ note, onClose }: SecureViewerProps) {
   };
 
   // ─── Track current visible page ───────────────────────────────────────────
+  // Auto-scroll to last seen page when PDF is ready
+  useEffect(() => {
+    if (fetchState.stage === 'ready' && !initialScrollDone) {
+      const targetPageEl = pageRefs.current[initialPage.current! - 1];
+      if (targetPageEl) {
+        const timer = setTimeout(() => {
+          targetPageEl.scrollIntoView({ behavior: 'auto', block: 'start' });
+          setInitialScrollDone(true);
+        }, 100);
+        return () => clearTimeout(timer);
+      } else if (pageRefs.current.length > 0) {
+        // Abort if target doesn't exist but pages are rendered
+        setInitialScrollDone(true);
+      }
+    }
+  }, [fetchState.stage, initialScrollDone]);
+
   const handlePageVisible = useCallback((pageNumber: number) => {
+    if (!initialScrollDone) return;
     setCurrentPage(pageNumber);
-  }, []);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`lastPage_${note.id}`, String(pageNumber));
+      } catch {}
+    }
+  }, [note.id, initialScrollDone]);
 
   const numPages = fetchState.stage === 'ready' ? fetchState.numPages : 0;
 

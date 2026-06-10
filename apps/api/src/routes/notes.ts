@@ -68,21 +68,27 @@ notesRouter.get('/:id/stream', requireAuth(), asyncHandler(async (req: Request, 
     const isAdmin = role === 'SUPER_ADMIN' || role === 'CONTENT_MANAGER';
 
     if (!isAdmin) {
+      const dbUser = await withRetry(() =>
+        prisma.user.findUnique({
+          where: { id: req.user!.userId },
+          select: { plan: true, planExpiresAt: true, paidAt: true },
+        })
+      );
+
       if (note.accessType === 'LIFETIME') {
         // LIFETIME notes: check if the user has ever paid (paidAt is set permanently)
-        const dbUser = await withRetry(() =>
-          prisma.user.findUnique({
-            where: { id: req.user!.userId },
-            select: { paidAt: true },
-          })
-        );
         if (!dbUser?.paidAt) {
           res.status(403).json({ error: 'This note requires a paid subscription' });
           return;
         }
       } else {
-        // TIMED notes: active paid plan required
-        if (plan !== 'PAID') {
+        // TIMED notes: active paid plan required. Check DB truth as well as JWT
+        // so a just-paid user with an older FREE token is not incorrectly denied.
+        const hasLivePaidPlan =
+          dbUser?.plan === 'PAID' &&
+          (!dbUser.planExpiresAt || dbUser.planExpiresAt > new Date());
+
+        if (plan !== 'PAID' && !hasLivePaidPlan) {
           res.status(403).json({ error: 'This note requires an active paid subscription' });
           return;
         }
