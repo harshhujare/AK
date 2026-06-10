@@ -3,8 +3,11 @@ import { Playfair_Display, DM_Sans } from "next/font/google";
 import "./globals.css";
 import QueryProvider from "@/lib/query-provider";
 import Navbar from "@/components/layout/Navbar";
+import BottomNav from "@/components/layout/BottomNav";
 import AuthProvider from "@/components/auth/AuthProvider";
 import { ThemeProvider } from "@/lib/theme";
+
+import Script from "next/script";
 
 const playfair = Playfair_Display({
   variable: "--font-serif",
@@ -38,8 +41,15 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${playfair.variable} ${dmSans.variable}`} data-theme="light" suppressHydrationWarning>
       <head>
-        {/* Prevent flash of wrong theme: read localStorage before first paint */}
-        <script
+        <link rel="offline" href="/offline.html" />
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/icon-512.png" />
+        <meta name="theme-color" content="#0f0f13" />
+      </head>
+      <body className="min-h-full flex flex-col">
+        <Script
+          id="theme-script"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               try {
@@ -50,13 +60,29 @@ export default function RootLayout({
             `,
           }}
         />
-      </head>
-      <body className="min-h-full flex flex-col">
+        <Script
+          id="sw-script"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  var swUrl = ${process.env.NEXT_PUBLIC_DISABLE_SW === 'true' ? "'/sw-kill.js'" : "'/sw.js'"};
+                  navigator.serviceWorker.register(swUrl)
+                    .catch(function() { /* SW registration failed */ });
+                });
+              }
+            `,
+          }}
+        />
         <ThemeProvider>
           <QueryProvider>
             <AuthProvider>
               <Navbar />
-              <div style={{ paddingTop: "64px" }}>{children}</div>
+              <div style={{ paddingTop: "64px" }}>
+                {children}
+              </div>
+              <BottomNav />
             </AuthProvider>
           </QueryProvider>
         </ThemeProvider>

@@ -12,12 +12,9 @@ import ContactForm from '@/components/help/ContactForm';
 import TicketCard from '@/components/help/TicketCard';
 import useAuthStore from '@/lib/auth-store';
 import apiClient from '@/lib/api-client';
+import { useFaqs } from '@/hooks/useFaqs';
 
 type Tab = 'help' | 'tickets';
-
-interface FAQ {
-  id: string; category: string; question: string; answer: string;
-}
 
 export default function HelpCenterPage() {
   const { user, isInitialized, initialize } = useAuthStore();
@@ -36,7 +33,9 @@ export default function HelpCenterPage() {
     return () => window.removeEventListener('popstate', readTab);
   }, []);
 
-  const [faqs, setFaqs] = useState<FAQ[]>([]);
+  // FAQs via React Query — cached in localStorage for 7 days (Phase 3c)
+  const { data: faqs = [] } = useFaqs();
+
   const [tickets, setTickets] = useState<any[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
   const [ticketsError, setTicketsError] = useState('');
@@ -46,13 +45,7 @@ export default function HelpCenterPage() {
     if (!isInitialized) initialize();
   }, [initialize, isInitialized]);
 
-  // Fetch FAQs once
-  useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/faqs`)
-      .then(r => r.json())
-      .then(j => setFaqs(j.data || []))
-      .catch(() => {});
-  }, []);
+  // Note: FAQs are now fetched via useFaqs() hook (React Query, Phase 3c)
 
   // Fetch tickets when that tab is active and user is logged in
   const fetchTickets = useCallback(() => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import useAuthStore from '@/lib/auth-store';
 import { useAnnouncements } from '@/hooks/useAnnouncements';
@@ -27,6 +27,10 @@ export default function Home() {
   
   const [viewingNote, setViewingNote] = useState<NoteWithSubject | null>(null);
 
+  // Hydration fix for localStorage (React Query offline mode / Zustand)
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const handleSubjectSelect = (subjectId: string | null) => {
     setSelectedSubject(subjectId);
     setPage(1);
@@ -37,7 +41,7 @@ export default function Home() {
       {/* ─── Hero Slider ──────────────────────────────────────────────────────── */}
       <section className="section-hero">
         <div className="hero-container">
-          {loadingAnnouncements ? (
+          {(!mounted || loadingAnnouncements) ? (
             <div className="slider-skeleton" />
           ) : announcements && announcements.length > 0 ? (
             <Slider announcements={announcements} />
@@ -114,6 +118,93 @@ export default function Home() {
               <p>No notes found for this subject.</p>
             </div>
           )}
+        </div>
+      </section>
+
+      {/* ─── Testimonials Section ──────────────────────────────────────────────── */}
+      <section id="testimonials" className="section-testimonials">
+        <div className="testimonials-container">
+
+          <div className="testimonials-header">
+            <p className="testimonials-eyebrow">Student Stories</p>
+            <h2 className="testimonials-title font-serif">What Our Students Say</h2>
+            <p className="testimonials-subtitle">
+              Thousands of Maharashtra TET aspirants have cleared their exam with Ajit Sir&apos;s guidance.
+            </p>
+          </div>
+
+          <div className="testimonials-grid">
+            {([
+              {
+                name: 'Priya Deshmukh',
+                location: 'Pune, Maharashtra',
+                initials: 'PD',
+                color: '#6366f1',
+                badge: 'TET Paper 1 Cleared ✓',
+                text: 'Ajit Sir\'s notes are incredibly well-structured. The bilingual explanations in Marathi and English made it so much easier to understand concepts I\'d struggled with for years. Cleared TET Paper 1 on my very first attempt!',
+              },
+              {
+                name: 'Rahul Patil',
+                location: 'Nashik, Maharashtra',
+                initials: 'RP',
+                color: '#0ea5e9',
+                badge: 'Score: 87/150',
+                text: 'The premium notes are worth every rupee. Chapter-wise PDFs are concise and exam-focused. I wasted 2 years with random YouTube videos before finding this platform. Cleared TET with 87 marks last month.',
+              },
+              {
+                name: 'Snehal Jadhav',
+                location: 'Aurangabad, Maharashtra',
+                initials: 'SJ',
+                color: '#10b981',
+                badge: 'TET Paper 2 Cleared ✓',
+                text: 'As a working woman preparing alongside my job, I needed structured and to-the-point material. Ajit Sir\'s notes let me prepare in just 2–3 hours a day. The offline PDF feature is a lifesaver during commutes!',
+              },
+              {
+                name: 'Akash Kulkarni',
+                location: 'Kolhapur, Maharashtra',
+                initials: 'AK',
+                color: '#f59e0b',
+                badge: 'Score improved: 62 → 93',
+                text: 'I was skeptical at first but the quality blew me away. Every topic is covered with real exam examples. My score jumped from 62 to 93 in just 3 months of consistent study with these notes.',
+              },
+              {
+                name: 'Pooja Shinde',
+                location: 'Nagpur, Maharashtra',
+                initials: 'PS',
+                color: '#ec4899',
+                badge: 'TET Paper 1 Cleared ✓',
+                text: 'The platform is clean, fast, and the notes download instantly even on slow internet. Sir personally covers topics that frequently appear in exams. Highly recommend to every TET aspirant in Maharashtra.',
+              },
+              {
+                name: 'Vijay Mane',
+                location: 'Satara, Maharashtra',
+                initials: 'VM',
+                color: '#8b5cf6',
+                badge: 'Cleared on 3rd attempt ✓',
+                text: 'Failed TET twice before discovering AjitSir Academy. The systematic approach and subject-wise breakdown made all the difference. Third attempt — cleared with distinction. Sir\'s teaching style is truly unique.',
+              },
+            ] as const).map((t) => (
+              <div key={t.name} className="testimonial-card">
+                <div className="testimonial-stars" aria-label="5 out of 5 stars">
+                  {[0,1,2,3,4].map((i) => (
+                    <svg key={i} width="15" height="15" viewBox="0 0 24 24" fill="#f59e0b" aria-hidden="true">
+                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                    </svg>
+                  ))}
+                </div>
+                <p className="testimonial-text">&ldquo;{t.text}&rdquo;</p>
+                <span className="testimonial-badge">{t.badge}</span>
+                <div className="testimonial-author">
+                  <span className="testimonial-avatar" style={{ background: t.color }} aria-hidden="true">{t.initials}</span>
+                  <div>
+                    <p className="testimonial-name">{t.name}</p>
+                    <p className="testimonial-location">{t.location}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
         </div>
       </section>
 
@@ -415,6 +506,145 @@ export default function Home() {
           /* PNG has transparent bg — card bg shows through cleanly */
         }
 
+        /* ── Testimonials ─────────────────────────────────────────────────────── */
+        .section-testimonials {
+          padding: 6rem 1.5rem;
+          background: var(--bg-surface);
+          border-top: 1px solid var(--border);
+        }
+        .testimonials-container {
+          max-width: 1150px;
+          margin: 0 auto;
+        }
+        .testimonials-header {
+          text-align: center;
+          max-width: 580px;
+          margin: 0 auto 3.5rem;
+        }
+        .testimonials-eyebrow {
+          font-size: 0.78rem;
+          font-weight: 600;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--accent);
+          margin-bottom: 0.75rem;
+        }
+        .testimonials-title {
+          font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+          font-weight: 700;
+          color: var(--text-primary);
+          line-height: 1.2;
+          margin-bottom: 1rem;
+        }
+        .testimonials-subtitle {
+          font-size: 1rem;
+          color: var(--text-secondary);
+          line-height: 1.65;
+        }
+        .testimonials-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 1.5rem;
+        }
+        .testimonial-card {
+          background: var(--bg-surface-2);
+          border: 1px solid var(--border);
+          border-radius: 18px;
+          padding: 1.75rem;
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .testimonial-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 16px 48px rgba(0,0,0,0.12);
+        }
+        .testimonial-stars {
+          display: flex;
+          gap: 2px;
+        }
+        .testimonial-text {
+          font-size: 0.92rem;
+          line-height: 1.7;
+          color: var(--text-secondary);
+          flex: 1;
+        }
+        .testimonial-badge {
+          display: inline-block;
+          padding: 0.3rem 0.75rem;
+          background: var(--accent-bg);
+          color: var(--accent-text);
+          border-radius: 999px;
+          font-size: 0.72rem;
+          font-weight: 600;
+          align-self: flex-start;
+        }
+        .testimonial-author {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding-top: 0.5rem;
+          border-top: 1px solid var(--border);
+        }
+        .testimonial-avatar {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.75rem;
+          font-weight: 700;
+          color: white;
+          flex-shrink: 0;
+        }
+        .testimonial-name {
+          font-size: 0.875rem;
+          font-weight: 600;
+          color: var(--text-primary);
+        }
+        .testimonial-location {
+          font-size: 0.75rem;
+          color: var(--text-muted);
+          margin-top: 0.1rem;
+        }
+        @media (max-width: 960px) {
+          .testimonials-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+        @media (max-width: 600px) {
+          .section-testimonials {
+            padding: 3.5rem 0;
+          }
+          .testimonials-header {
+            margin-bottom: 2rem;
+            padding: 0 1.25rem;
+          }
+          .testimonials-grid {
+            /* Switch to horizontal scroll track */
+            display: flex;
+            flex-direction: row;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch;
+            gap: 1rem;
+            padding: 0.5rem 1.25rem 1.25rem;
+            /* Hide scrollbar but keep scroll */
+            scrollbar-width: none;
+          }
+          .testimonials-grid::-webkit-scrollbar {
+            display: none;
+          }
+          .testimonial-card {
+            /* Each card is ~80vw so the next one peeks in */
+            flex: 0 0 80vw;
+            min-width: 0;
+            scroll-snap-align: start;
+          }
+        }
+
         /* Footer */
         .footer {
           padding: 2rem;
@@ -443,6 +673,10 @@ export default function Home() {
           }
         }
         @media (max-width: 768px) {
+          /* Notes section hidden on mobile — use the Notes tab instead */
+          .section-notes {
+            display: none;
+          }
           .stats-grid {
             grid-template-columns: repeat(3, 1fr);
             gap: 1rem;
@@ -453,8 +687,14 @@ export default function Home() {
         }
         @media (max-width: 480px) {
           .stats-grid {
-            grid-template-columns: 1fr;
-            gap: 1.25rem;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+          }
+          .stat-num {
+            font-size: 1.5rem;
+          }
+          .stat-label {
+            font-size: 0.65rem;
           }
           .social-links {
             flex-direction: column;

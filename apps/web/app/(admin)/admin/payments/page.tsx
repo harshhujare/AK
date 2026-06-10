@@ -182,13 +182,15 @@ export default function AdminPaymentsPage() {
     }, 350);
   }, []);
 
-  const { data: statsData, isLoading: statsLoading } = useQuery({
+  const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useQuery({
     queryKey: ['admin-payment-stats'],
     queryFn: async () => {
       const { data } = await apiClient.get<{ data: PaymentStats }>('/api/admin/payments/stats');
       return data.data;
     },
-    refetchInterval: 60_000,
+    // Always re-fetch on mount — stats must reflect the latest DB state
+    staleTime: 0,
+    refetchInterval: 30_000,
   });
 
   const { data: configData } = useQuery({
@@ -199,7 +201,13 @@ export default function AdminPaymentsPage() {
     },
   });
 
-  const { data: paymentsData, isLoading: paymentsLoading } = useQuery({
+  const {
+    data: paymentsData,
+    isLoading: paymentsLoading,
+    isFetching: paymentsFetching,
+    refetch: refetchPayments,
+    dataUpdatedAt,
+  } = useQuery({
     queryKey: ['admin-payments', page, statusFilter, debouncedSearch],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -212,7 +220,22 @@ export default function AdminPaymentsPage() {
       return data.data;
     },
     placeholderData: (prev) => prev,
+    // CRITICAL FIX: staleTime:0 means every mount/focus triggers a re-fetch.
+    // Without this, the 10-minute global staleTime kept PENDING rows frozen
+    // even after the backend had already written SUCCESS to the DB.
+    staleTime: 0,
+    // Auto-refresh every 30s so long-lived admin sessions stay current
+    refetchInterval: 30_000,
   });
+
+  const lastUpdated = dataUpdatedAt
+    ? new Date(dataUpdatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : null;
+
+  const handleRefresh = useCallback(() => {
+    refetchPayments();
+    refetchStats();
+  }, [refetchPayments, refetchStats]);
 
   const stats = statsData;
   const configs = configData ?? [];
@@ -271,8 +294,24 @@ export default function AdminPaymentsPage() {
       {/* ── Payment History ── */}
       <section className="pay-history-section" aria-label="Payment history">
         <div className="pay-history-header">
-          <h2 className="section-heading" style={{ margin: 0 }}>Transaction History</h2>
+          <div className="pay-history-title-row">
+            <h2 className="section-heading" style={{ margin: 0 }}>Transaction History</h2>
+            {lastUpdated && (
+              <span className="pay-last-updated">
+                {paymentsFetching ? '🔄 Refreshing…' : `Updated at ${lastUpdated}`}
+              </span>
+            )}
+          </div>
           <div className="pay-filters">
+            <button
+              id="refresh-payments-btn"
+              className="pay-refresh-btn"
+              onClick={handleRefresh}
+              disabled={paymentsFetching}
+              aria-label="Refresh payment data"
+            >
+              {paymentsFetching ? '…' : '↻'} Refresh
+            </button>
             <input
               id="payment-search"
               type="search"
@@ -497,6 +536,30 @@ export default function AdminPaymentsPage() {
           gap: 1rem;
           margin-bottom: 1rem;
         }
+        .pay-history-title-row {
+          display: flex;
+          align-items: baseline;
+          gap: 0.75rem;
+          flex-wrap: wrap;
+        }
+        .pay-last-updated {
+          font-size: 0.72rem;
+          color: var(--text-muted);
+          font-variant-numeric: tabular-nums;
+        }
+        .pay-refresh-btn {
+          padding: 0.4rem 0.85rem;
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          background: var(--bg-surface);
+          color: var(--text-secondary);
+          font-size: 0.82rem;
+          cursor: pointer;
+          transition: background 0.15s, color 0.15s;
+          white-space: nowrap;
+        }
+        .pay-refresh-btn:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
+        .pay-refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .pay-filters { display: flex; gap: 0.5rem; flex-wrap: wrap; }
         .pay-search-input {
           padding: 0.45rem 0.75rem;

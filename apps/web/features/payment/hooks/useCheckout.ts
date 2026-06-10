@@ -38,7 +38,7 @@ export function useCheckout() {
     if (!user || !accessToken) {
       // Save intent and redirect to login
       sessionStorage.setItem('pendingPlanCheckout', planDuration);
-      router.push('/login?callbackUrl=/pricing');
+      router.push('/login?callbackUrl=/plans');
       return;
     }
 
@@ -82,7 +82,7 @@ export function useCheckout() {
             await proceedToSuccess(planDuration);
           } catch (verifyError: any) {
             if (verifyError.message === 'Unauthorized') {
-              router.push('/login?callbackUrl=/pricing');
+              router.push('/login?callbackUrl=/plans');
               return;
             }
             
@@ -146,7 +146,7 @@ export function useCheckout() {
     } catch (error: any) {
       if (error.message === 'Unauthorized') {
         sessionStorage.setItem('pendingPlanCheckout', planDuration);
-        router.push('/login?callbackUrl=/pricing');
+        router.push('/login?callbackUrl=/plans');
         return;
       }
       setState({ status: 'error', message: error.message || 'An unexpected error occurred during checkout' });

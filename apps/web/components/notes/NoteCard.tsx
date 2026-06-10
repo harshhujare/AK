@@ -1,10 +1,13 @@
 'use client';
 
+import { useState, useCallback } from 'react';
 import type { NoteWithSubject } from '@/hooks/useNotes';
 import { useRouter } from 'next/navigation';
 import type { User } from '@ajitsir/shared';
 import PaywallBanner from '../payment/PaywallBanner';
 import { canAccessNote } from '@/features/payment/utils/accessControl';
+import useAuthStore from '@/lib/auth-store';
+import apiClient from '@/lib/api-client';
 
 // ─── Sub-component: Sign-in overlay ──────────────────────────────────────────
 
@@ -74,18 +77,57 @@ interface NoteCardProps {
  */
 export default function NoteCard({ note, user, onClick }: NoteCardProps) {
   const hasAccess = canAccessNote(user, note);
+  const { accessToken } = useAuthStore();
+  const [recheckState, setRecheckState] = useState<'idle' | 'checking' | 'denied'>('idle');
 
-  const handleClick = () => {
+  const handleClick = useCallback(async () => {
     if (hasAccess) {
       onClick(note);
+      return;
     }
-  };
 
-  // Determine which overlay to show for locked paid notes
-  const lockOverlay = !hasAccess
+    // Note is paid and local user says FREE — but this may be stale.
+    // A real payment could have succeeded while the localStorage user was not
+    // yet updated (e.g. refresh() failed or was slow after payment).
+    // Fire a one-shot /me re-check so we don't lock the user out due to a
+    // stale cache bug. Only show the paywall if the server also says FREE.
+    if (note.isPaid && user && accessToken && recheckState === 'idle') {
+      setRecheckState('checking');
+      try {
+        const { data } = await apiClient.get('/api/auth/me');
+        const freshUser = data.data as User;
+        // Update Zustand + localStorage with the latest plan data
+        localStorage.setItem('user', JSON.stringify(freshUser));
+        useAuthStore.setState({ user: freshUser });
+
+        // Re-evaluate access with the fresh data from the server
+        if (canAccessNote(freshUser, note)) {
+          onClick(note);
+          setRecheckState('idle');
+          return;
+        }
+      } catch {
+        // Network failure — fall through to show paywall normally
+      }
+      setRecheckState('denied');
+    }
+  }, [hasAccess, note, onClick, user, accessToken, recheckState]);
+
+  // Determine which overlay to show for locked paid notes.
+  // recheckState='checking' — /me is in-flight — show a spinner instead of paywall
+  // recheckState='denied'   — server confirmed FREE/expired — show paywall
+  // recheckState='idle'     — first click hasn't happened yet — show paywall (CSS only)
+  const showPaywall = !hasAccess && recheckState !== 'checking';
+  const lockOverlay = showPaywall
     ? !user
       ? <SignInOverlay noteId={note.id} />
       : <PaywallBanner />
+    : recheckState === 'checking'
+    ? (
+        <div className="note-recheck-overlay" aria-label="Checking access…">
+          <span className="note-recheck-spinner" />
+        </div>
+      )
     : null;
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
@@ -93,17 +135,17 @@ export default function NoteCard({ note, user, onClick }: NoteCardProps) {
 
   return (
     <div
-      className={`note-card${!hasAccess ? ' note-card--locked' : ''}`}
+      className={`note-card${showPaywall ? ' note-card--locked' : ''}`}
       onClick={handleClick}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
-        if ((e.key === 'Enter' || e.key === ' ') && hasAccess) {
+        if ((e.key === 'Enter' || e.key === ' ') && !showPaywall) {
           e.preventDefault();
-          onClick(note);
+          handleClick();
         }
       }}
-      aria-label={`${note.title}${note.isPaid ? ' — Premium' : ''}${!hasAccess ? ' (locked)' : ''}`}
+      aria-label={`${note.title}${note.isPaid ? ' — Premium' : ''}${showPaywall ? ' (locked)' : recheckState === 'checking' ? ' (checking access…)' : ''}`}
     >
       {/* ── Thumbnail + Access Overlay ─────────────────────────────── */}
       <div className="note-card-image-container">
@@ -251,6 +293,25 @@ export default function NoteCard({ note, user, onClick }: NoteCardProps) {
           font-size: 0.75rem;
           color: var(--text-muted);
         }
+        /* Recheck spinner — shown while /me is in-flight on first click */
+        .note-recheck-overlay {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(0,0,0,0.35);
+          backdrop-filter: blur(2px);
+        }
+        .note-recheck-spinner {
+          width: 28px;
+          height: 28px;
+          border: 3px solid rgba(255,255,255,0.2);
+          border-top-color: white;
+          border-radius: 50%;
+          animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
     </div>
   );

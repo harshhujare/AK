@@ -9,7 +9,6 @@ import { useTheme } from '@/lib/theme';
 export default function Navbar() {
   const { user, logout, isInitialized } = useAuthStore();
   const { theme, toggle } = useTheme();
-  const [menuOpen, setMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -35,11 +34,6 @@ export default function Navbar() {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
-
-  // Close mobile menu on route change
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [pathname]);
 
   const handleLogout = async () => {
     await logout();
@@ -153,78 +147,10 @@ export default function Navbar() {
               </Link>
             )}
           </div>
-
-          {/* Mobile hamburger */}
-          <button
-            id="mobile-menu-button"
-            className="navbar-hamburger"
-            onClick={() => setMenuOpen(!menuOpen)}
-            aria-expanded={menuOpen}
-            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-          >
-            <span className={`hamburger-bar ${menuOpen ? 'bar-top--open' : ''}`} />
-            <span className={`hamburger-bar ${menuOpen ? 'bar-mid--open' : ''}`} />
-            <span className={`hamburger-bar ${menuOpen ? 'bar-bot--open' : ''}`} />
-          </button>
         </div>
       </nav>
 
-      {/* Mobile slide-in menu */}
-      {menuOpen && (
-        <div className="mobile-menu" role="dialog" aria-modal="true" aria-label="Mobile navigation">
-          <div className="mobile-menu-overlay" onClick={() => setMenuOpen(false)} />
-          <div className="mobile-menu-panel">
-            <div className="mobile-menu-brand">
-              <span className="navbar-logo-dot" aria-hidden="true" />
-              <span className="font-serif" style={{ color: 'var(--text-primary)', fontSize: '1rem' }}>AjitSir Academy</span>
-            </div>
-
-            <nav className="mobile-menu-links">
-              <Link href="/pricing" className="mobile-menu-link" style={{ color: 'var(--accent)', fontWeight: 600 }}>Pricing</Link>
-              <Link href="/#notes" className="mobile-menu-link">Notes</Link>
-              <Link href="/#about" className="mobile-menu-link">About</Link>
-              <Link href="/help" className="mobile-menu-link">Help Center</Link>
-            </nav>
-
-            <div className="mobile-menu-footer">
-              {!isInitialized ? (
-                <>
-                  <div className="mobile-menu-auth-skeleton">
-                    <div className="skeleton-avatar-lg" />
-                    <div>
-                      <div className="skeleton-text" style={{ width: '120px', marginBottom: '8px' }} />
-                      <div className="skeleton-text" style={{ width: '160px', height: '12px' }} />
-                    </div>
-                  </div>
-                  <div className="skeleton-button" />
-                </>
-              ) : user ? (
-                <>
-                  <div className="mobile-menu-user">
-                    <span className="navbar-avatar navbar-avatar--lg">{getInitials(user.name)}</span>
-                    <div>
-                      <p style={{ color: 'var(--text-primary)', fontSize: '0.9rem', fontWeight: 500 }}>{user.name}</p>
-                      <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{user.email}</p>
-                    </div>
-                  </div>
-                  {(user.role === 'SUPER_ADMIN' || user.role === 'CONTENT_MANAGER' || user.role === 'SUPPORT_MANAGER') && (
-                    <Link href="/admin" className="mobile-menu-action-btn">Admin Panel</Link>
-                  )}
-                  <button id="mobile-logout-button" className="mobile-menu-action-btn mobile-menu-action-btn--danger"
-                    onClick={handleLogout}>
-                    Sign out
-                  </button>
-                </>
-              ) : (
-                <Link href="/login" className="mobile-menu-login-btn" id="mobile-login-button">
-                  Sign in with Google
-                </Link>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Mobile bottom nav is handled by BottomNav component in layout.tsx */}
       <style>{`
         .navbar {
           position: fixed;
@@ -494,15 +420,12 @@ export default function Navbar() {
           .navbar-login-btn {
             display: none;
           }
-          .navbar-hamburger {
-            display: flex;
-          }
           .navbar-auth {
             margin-left: auto;
           }
-          /* Show theme toggle on mobile inline with hamburger */
+          /* Hide theme toggle on mobile — it's in the Account page instead */
           .theme-toggle-btn {
-            display: flex;
+            display: none;
           }
         }
 
@@ -659,29 +582,6 @@ export default function Navbar() {
           height: 14px;
           border-radius: 4px;
           background: var(--border-strong);
-        }
-
-        .mobile-menu-auth-skeleton {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          padding-bottom: 0.5rem;
-          animation: pulse 1.5s infinite ease-in-out;
-        }
-
-        .skeleton-avatar-lg {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          background: var(--border-strong);
-        }
-
-        .skeleton-button {
-          height: 44px;
-          width: 100%;
-          border-radius: 10px;
-          background: var(--border-strong);
-          animation: pulse 1.5s infinite ease-in-out;
         }
       `}</style>
     </>
