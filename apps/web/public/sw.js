@@ -1,6 +1,6 @@
 // AjitSir Academy — Minimal Service Worker
 // Version: bump SHELL_VERSION when deploying new Next.js build to force cache refresh
-const SHELL_VERSION = 'v3';
+const SHELL_VERSION = 'v4';
 const SHELL_CACHE = `ajitsir-shell-${SHELL_VERSION}`;
 const THUMB_CACHE = 'ajitsir-thumbs-v1';
 const OFFLINE_CACHE = 'ajitsir-offline-v1';
@@ -109,14 +109,22 @@ async function cacheFirst(request, cacheName) {
   return response;
 }
 
-// ─── Strategy: NetworkFirst with cache fallback ────────────────────────────────
+// ─── Strategy: NetworkFirst with cache fallback ──────────────────────────────────
 // Used for thumbnails — prefer fresh network, fall back to cache if offline.
 // maxAgeSeconds: stored entries older than this are considered stale and refreshed.
+// A 15 s AbortController timeout prevents mobile data hangs from causing the
+// thumbnail fetch to silently stall; we fall through to the cache instead.
+const THUMB_TIMEOUT_MS = 15000;
+
 async function networkFirstWithCache(request, cacheName, maxAgeSeconds) {
   const cache = await caches.open(cacheName);
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), THUMB_TIMEOUT_MS);
+
   try {
-    const response = await fetch(request);
+    const response = await fetch(request, { signal: controller.signal });
+    clearTimeout(timer);
     if (response.ok) {
       // Store with a timestamp header so we can check age later
       const responseToCache = response.clone();
@@ -132,7 +140,8 @@ async function networkFirstWithCache(request, cacheName, maxAgeSeconds) {
     }
     return response;
   } catch {
-    // Offline — try cache
+    clearTimeout(timer);
+    // Offline or timed out — try cache
     const cached = await cache.match(request);
     if (cached) {
       const cachedAt = parseInt(cached.headers.get('sw-cached-at') || '0');
@@ -144,19 +153,35 @@ async function networkFirstWithCache(request, cacheName, maxAgeSeconds) {
   }
 }
 
-// ─── Strategy: Navigation handler ─────────────────────────────────────────────
-// For page navigations: try network, fall back to cached page, then offline.html.
+// ─── Strategy: Navigation handler ───────────────────────────────────────────────────
+// For page navigations: try network (with a timeout), fall back to cached page,
+// then offline.html.
+//
+// WHY timeout?
+// On mobile data (3G / weak 4G) fetch() can hang for 20-30 s before the OS
+// decides the connection is dead. Without a timeout the browser shows a blank
+// screen for that entire period and then serves offline.html. With a 10 s
+// AbortController timeout we fail fast, serve the cached page, and the user
+// sees content immediately. If the cached page is also missing, offline.html
+// is shown — which is the same result but reached MUCH faster.
+const NAV_TIMEOUT_MS = 10000; // 10 s — generous for slow 3G, fast enough to feel responsive
+
 async function navigationHandler(request) {
   const cache = await caches.open(SHELL_CACHE);
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), NAV_TIMEOUT_MS);
+
   try {
-    const response = await fetch(request);
+    const response = await fetch(request, { signal: controller.signal });
+    clearTimeout(timer);
     if (response.ok) {
       cache.put(request, response.clone()); // update shell cache while online
     }
     return response;
   } catch {
-    // Offline — try exact URL match first
+    clearTimeout(timer);
+    // Network failed or timed out — try exact URL match first
     const cachedPage = await cache.match(request);
     if (cachedPage) return cachedPage;
 

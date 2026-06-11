@@ -51,18 +51,13 @@ export function useSecurePdf(note: NoteWithSubject, retryNonce: number) {
           return; // done — no network needed
         }
 
-        // ── Step 2: Cache miss — check connectivity before attempting fetch ─
-        const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-        if (!isOnline) {
-          setFetchState({
-            stage: 'error',
-            message: 'You are offline and this PDF has not been downloaded yet. Connect to the internet to load it for the first time.',
-            isOffline: true,
-          });
-          return;
-        }
+        // ── Step 2: Cache miss — attempt network fetch ──────────────────────
+        // Do NOT pre-flight with navigator.onLine — it is unreliable on mobile
+        // data connections and can be stale-false for an entire session after a
+        // brief network handover. Instead we just try the fetch; the catch block
+        // below handles real offline/network-failure scenarios.
 
-        // ── Step 3: Online — stream from server ──────────────────────────────
+        // ── Step 3: Stream from server ───────────────────────────────────────
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
         const fetchPdf = async (token: string | null) => {
           return fetch(`${apiUrl}/api/notes/${note.id}/stream`, {
@@ -146,21 +141,25 @@ export function useSecurePdf(note: NoteWithSubject, retryNonce: number) {
       } catch (err) {
         if (!isMounted) return;
 
-        // Distinguish network/offline errors from auth or server errors
+        // Classify the error as a network/offline failure.
+        // We intentionally do NOT read navigator.onLine here — it can be
+        // stale-false on mobile. Instead we infer offline from the error type:
+        //   TypeError ("Failed to fetch" / "NetworkError") → network unreachable
+        //   AbortError → our own timeout fired → treat as connectivity issue
         const isNetworkError =
-          err instanceof TypeError &&
-          (err.message.includes('fetch') ||
-            err.message.includes('network') ||
-            err.message.includes('Failed to fetch'));
-        const isOffline = isNetworkError || (typeof navigator !== 'undefined' && !navigator.onLine);
+          (err instanceof TypeError &&
+            (err.message.toLowerCase().includes('fetch') ||
+              err.message.toLowerCase().includes('network') ||
+              err.message.toLowerCase().includes('failed to fetch'))) ||
+          (err instanceof DOMException && err.name === 'AbortError');
 
         const msg = err instanceof Error ? err.message : 'Failed to load document. Please try again.';
         setFetchState({
           stage: 'error',
-          message: isOffline
-            ? 'You appear to be offline. Check your connection and try again.'
+          message: isNetworkError
+            ? 'Could not reach the server. Check your connection and try again.'
             : msg,
-          isOffline,
+          isOffline: isNetworkError,
         });
       }
     }
