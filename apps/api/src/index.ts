@@ -12,7 +12,7 @@ import { supportRouter } from './routes/support';
 import { faqsRouter } from './routes/faqs';
 import { errorHandler } from './middleware/error';
 import { captureRawBody } from './middleware/rawBody';
-import { prisma } from './lib/prisma';
+import { prisma, withRetry } from './lib/prisma';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -48,20 +48,55 @@ app.use(express.json());
 app.use(cookieParser());
 
 // ─── Health check (also pings DB to keep Neon awake) ──────────────────────────
-// GET /health
-// Returns { status: 'ok', db: 'ok'|'error', timestamp }
-// A lightweight SELECT 1 is enough to prevent Neon scale-to-zero.
-// The GitHub Actions keep-alive cron hits this endpoint every 14 min.
-app.get('/health', async (_req, res) => {
-  let dbStatus = 'error';
+// GET /health, /api/health, /api/keep-alive
+// Use the API URL in cron, not the Vercel frontend URL. These endpoints wake
+// the Render server and run SELECT 1 so Neon also stays warm.
+async function pingDatabase() {
+  await withRetry(() => prisma.$queryRaw`SELECT 1`, 2);
+}
+
+const healthHandler: express.RequestHandler = async (_req, res) => {
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
+    'Pragma': 'no-cache',
+  });
+
   try {
-    await prisma.$queryRaw`SELECT 1`;
-    dbStatus = 'ok';
-  } catch {
-    // DB unreachable — still return 200 so Render doesn't mark the service unhealthy
-    // (Neon may be in the middle of resuming; the next ping will catch it)
+    await pingDatabase();
+    res.json({
+      status: 'ok',
+      server: 'ok',
+      db: 'ok',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[health] Database ping failed:', error);
+    res.status(503).json({
+      status: 'degraded',
+      server: 'ok',
+      db: 'error',
+      timestamp: new Date().toISOString(),
+    });
   }
-  res.json({ status: 'ok', db: dbStatus, timestamp: new Date().toISOString() });
+};
+
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
+app.get('/api/keep-alive', healthHandler);
+
+// ─── Connectivity probe ───────────────────────────────────────────────────────
+// GET /api/ping
+// Used by the frontend useOnlineStatus hook to verify real internet reachability.
+// Must NOT hit the DB — we only want to confirm the network path to the server
+// is open. Responds immediately so even 2G/3G clients get a fast reply.
+// Cache-Control: no-store prevents CDNs/proxies from caching the 200 and
+// serving it when the origin is actually unreachable.
+app.get('/api/ping', (_req, res) => {
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
+    'Pragma': 'no-cache',
+  });
+  res.status(200).json({ ok: true });
 });
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
