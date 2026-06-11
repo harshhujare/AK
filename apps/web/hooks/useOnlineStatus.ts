@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-// How long to wait for the probe response before treating as offline (ms)
-const PROBE_TIMEOUT_MS = 5000;
+// How long to wait for the probe response before treating as offline (ms).
+// Set to 10 s — 2G/3G round-trips in rural Maharashtra can easily exceed 5 s.
+const PROBE_TIMEOUT_MS = 10_000;
 
 // Minimum gap between back-to-back probes (ms) — avoids hammering on flaky links
 const PROBE_DEBOUNCE_MS = 3000;
@@ -22,10 +23,18 @@ async function probeConnectivity(): Promise<boolean> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
 
+  // Derive probe URL from the API base so it works in every environment
+  // (localhost, staging, production) without hardcoding.
+  const apiBase =
+    process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+  const probeUrl = `${apiBase}/api/ping`;
+
   try {
-    // Fetch the SW itself — it's a small, same-origin file that always exists.
-    // cache: 'no-store' forces a real network round-trip even if SW intercepts it.
-    const res = await fetch('/sw.js', {
+    // HEAD avoids downloading a response body.
+    // cache: 'no-store' forces a real network round-trip even if SW intercepts.
+    // Using /api/ping instead of /sw.js avoids triggering a SW update check
+    // which adds latency and unpredictable behaviour on some Chrome versions.
+    const res = await fetch(probeUrl, {
       method: 'HEAD',
       cache: 'no-store',
       signal: controller.signal,

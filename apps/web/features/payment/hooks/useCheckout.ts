@@ -87,12 +87,20 @@ export function useCheckout() {
     console.log('[UPI Recovery] Detected return from UPI redirect, polling for plan upgrade...');
     setState({ status: 'polling' });
 
-    // Poll /me to detect the plan upgrade triggered by Razorpay webhook
+    // Poll /me to detect the plan upgrade triggered by Razorpay webhook.
+    // ── Fix C: always flow through proceedToSuccess ──────────────────────────
+    // proceedToSuccess calls refresh() which re-issues a fresh JWT containing
+    // plan: 'PAID'. Without this, the Zustand store says Paid but the in-memory
+    // accessToken still has plan: 'FREE', causing 403s on content requests until
+    // the next page load. The polling path must go through proceedToSuccess so
+    // the JWT is always updated before the user is shown the success page.
     pollForPlanUpgrade(() => useAuthStore.getState().accessToken || '').then(async (upgraded) => {
       if (upgraded) {
+        // proceedToSuccess calls refresh() → fresh JWT → no 403 window
         await proceedToSuccess(planDuration);
       } else {
-        // Webhook hasn't fired yet — show a clear, non-alarming message
+        // Webhook hasn't fired within the polling window — show a clear,
+        // non-alarming message. The plan WILL activate once the webhook lands.
         setState({
           status: 'error',
           message:
@@ -260,7 +268,20 @@ export function useCheckout() {
         sessionStorage.removeItem(UPI_RECOVERY_KEY);
         setState({ status: 'error', message: response.error.description || 'Payment failed' });
       });
-      rzp.open();
+
+      // ── Fix D: wrap rzp.open() in try/catch ───────────────────────────────
+      // If the Razorpay constructor succeeded (isLoaded === true) but open()
+      // throws (e.g., a network error loading the checkout iframe, or an SDK
+      // bug), the upiPollRef interval would run forever against a stale token
+      // and the sessionStorage recovery key would never be cleared.
+      try {
+        rzp.open();
+      } catch (openErr) {
+        console.error('[Checkout] rzp.open() threw:', openErr);
+        clearUpiPoll();
+        sessionStorage.removeItem(UPI_RECOVERY_KEY);
+        setState({ status: 'error', message: 'Could not open the payment window. Please try again.' });
+      }
 
     } catch (error: any) {
       if (error.message === 'Unauthorized') {

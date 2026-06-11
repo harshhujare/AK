@@ -64,6 +64,21 @@ app.get('/health', async (_req, res) => {
   res.json({ status: 'ok', db: dbStatus, timestamp: new Date().toISOString() });
 });
 
+// ─── Connectivity probe ───────────────────────────────────────────────────────
+// GET /api/ping
+// Used by the frontend useOnlineStatus hook to verify real internet reachability.
+// Must NOT hit the DB — we only want to confirm the network path to the server
+// is open. Responds immediately so even 2G/3G clients get a fast reply.
+// Cache-Control: no-store prevents CDNs/proxies from caching the 200 and
+// serving it when the origin is actually unreachable.
+app.get('/api/ping', (_req, res) => {
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
+    'Pragma': 'no-cache',
+  });
+  res.status(200).json({ ok: true });
+});
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRouter);
 app.use('/api/subjects', subjectsRouter);

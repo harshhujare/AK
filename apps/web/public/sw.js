@@ -1,9 +1,10 @@
 // AjitSir Academy — Minimal Service Worker
 // Version: bump SHELL_VERSION when deploying new Next.js build to force cache refresh
-const SHELL_VERSION = 'v4';
+const SHELL_VERSION = 'v5';
 const SHELL_CACHE = `ajitsir-shell-${SHELL_VERSION}`;
 const THUMB_CACHE = 'ajitsir-thumbs-v1';
 const OFFLINE_CACHE = 'ajitsir-offline-v1';
+const API_CACHE = 'ajitsir-api-v1'; // GET /api/* offline fallback
 
 // ─── Routes that must NEVER be served from cache ─────────────────────────────
 // These are security-critical: auth, payments, premium PDF bytes, and admin data.
@@ -31,14 +32,18 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// ─── Activate: wipe outdated shell caches ─────────────────────────────────────
+// ─── Activate: wipe outdated caches ────────────────────────────────────────────
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
         keys.map((key) => {
-          // Delete old shell caches (different version) but keep thumbs + offline
+          // Delete old shell caches (different version) but keep thumbs + offline + api
           if (key.startsWith('ajitsir-shell-') && key !== SHELL_CACHE) {
+            return caches.delete(key);
+          }
+          // Delete old API cache versions (version is in the name)
+          if (key.startsWith('ajitsir-api-') && key !== API_CACHE) {
             return caches.delete(key);
           }
         })
@@ -90,7 +95,28 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 5. Everything else (other API endpoints, fonts, etc.) — network only
+  // 5. Same-origin GET /api/* — NetworkFirst with API cache fallback.
+  //
+  // WHY: React Query's offlineFirst mode keeps data in-memory across renders but
+  // not across hard refreshes. If the device is offline on a hard refresh, RQ
+  // has no data and enters a loading/error state even though the response was
+  // fetched earlier in the session. Caching GET /api/* here at the SW layer means
+  // the last-seen API response is always available, even after a hard refresh.
+  //
+  // NETWORK_ONLY_PATTERNS (auth, payments, PDF stream, admin) are already
+  // excluded above — only safe idempotent public GETs reach this branch.
+  // POST / non-GET requests fall through to the browser (case 6).
+  if (
+    isSameOrigin &&
+    request.method === 'GET' &&
+    pathname.startsWith('/api/')
+  ) {
+    // 10 s timeout — enough for Render cold start, fast enough to feel responsive
+    event.respondWith(networkFirstWithCache(request, API_CACHE, 60 * 60));
+    return;
+  }
+
+  // 6. Everything else (non-GET API calls, fonts, etc.) — network only
   // Do not intercept — let the browser handle normally
 });
 
