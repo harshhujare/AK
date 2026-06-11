@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import useAuthStore from '@/lib/auth-store';
 import { createOrderAPI, verifyPaymentAPI } from '../services/api';
@@ -20,6 +20,24 @@ export type CheckoutState =
   | { status: 'cancelled' }            // user dismissed modal
   | { status: 'error'; message: string };
 
+// ─── sessionStorage key for UPI redirect recovery ─────────────────────────────
+// On Android, UPI payments via Razorpay cause a FULL PAGE REDIRECT to the UPI
+// app. When the user returns, the browser either reloads the page or restores
+// it from bfcache. In both cases React state is gone, setInterval is destroyed,
+// and the Razorpay handler() callback never fires.
+//
+// Fix: Before opening the Razorpay modal we save the pending order info to
+// sessionStorage. On mount, useCheckout checks for this saved state and
+// immediately starts polling /me — which will return PAID once the Razorpay
+// webhook has processed the payment (typically within 30–90 s of the capture).
+const UPI_RECOVERY_KEY = 'pendingRazorpayOrder';
+
+interface PendingOrderData {
+  planDuration: PlanDuration;
+  orderId: string;
+  savedAt: number; // epoch ms — used to expire stale entries
+}
+
 export function useCheckout() {
   const [state, setState] = useState<CheckoutState>({ status: 'idle' });
   const { user, accessToken, refresh } = useAuthStore();
@@ -33,6 +51,62 @@ export function useCheckout() {
       upiPollRef.current = null;
     }
   };
+
+  // ─── UPI Redirect Recovery ─────────────────────────────────────────────────
+  // On mount: check if there's a saved pending order from a UPI redirect that
+  // destroyed the page. If found and less than 10 minutes old, start polling
+  // immediately — the webhook will have updated the plan by the time we check.
+  useEffect(() => {
+    if (!user || !accessToken) return; // not logged in yet, wait
+
+    const raw = sessionStorage.getItem(UPI_RECOVERY_KEY);
+    if (!raw) return;
+
+    let saved: PendingOrderData;
+    try {
+      saved = JSON.parse(raw);
+    } catch {
+      sessionStorage.removeItem(UPI_RECOVERY_KEY);
+      return;
+    }
+
+    // Expire recovery data after 10 minutes — beyond that, webhook has either
+    // succeeded (plan is PAID) or Razorpay will not deliver it.
+    const ageMs = Date.now() - saved.savedAt;
+    if (ageMs > 10 * 60 * 1000) {
+      sessionStorage.removeItem(UPI_RECOVERY_KEY);
+      return;
+    }
+
+    // Found a recent pending order — this looks like a UPI redirect return.
+    // Clear it immediately so we don't re-enter recovery on the next page load.
+    sessionStorage.removeItem(UPI_RECOVERY_KEY);
+
+    const { planDuration, orderId } = saved;
+
+    console.log('[UPI Recovery] Detected return from UPI redirect, polling for plan upgrade...');
+    setState({ status: 'polling' });
+
+    // Poll /me to detect the plan upgrade triggered by Razorpay webhook
+    pollForPlanUpgrade(() => useAuthStore.getState().accessToken || '').then(async (upgraded) => {
+      if (upgraded) {
+        await proceedToSuccess(planDuration);
+      } else {
+        // Webhook hasn't fired yet — show a clear, non-alarming message
+        setState({
+          status: 'error',
+          message:
+            'Your UPI payment is being confirmed. This usually takes 1–2 minutes. ' +
+            'Please refresh the page to check your plan status. ' +
+            'If your plan is not activated after 10 minutes, contact support with Order ID: ' +
+            orderId,
+        });
+      }
+    });
+  // proceedToSuccess is defined below and stable across renders (no deps change).
+  // We intentionally run this effect only once on mount after auth is ready.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, accessToken]);
 
   const checkout = useCallback(async (planDuration: PlanDuration = '365') => {
     if (!user || !accessToken) {
@@ -69,6 +143,9 @@ export function useCheckout() {
         theme: { color: '#2563eb' },
         handler: async (response: RazorpayResponse) => {
           // Step 3: Verify Payment
+          // Clear the UPI recovery flag — the handler fired, so the page was NOT
+          // destroyed by a redirect. Normal flow succeeded.
+          sessionStorage.removeItem(UPI_RECOVERY_KEY);
           setState({ status: 'verifying' });
           
           try {
@@ -86,27 +163,55 @@ export function useCheckout() {
               return;
             }
             
-            // Timeout or network error during verify -> start polling
-            if (verifyError.name === 'AbortError' || verifyError.message.includes('fetch')) {
+            // All verify retries failed (timeout / network) → start webhook polling.
+            // verifyPaymentAPI already retried 3× with exponential backoff internally.
+            if (verifyError.name === 'AbortError' || verifyError.message?.includes('fetch') || verifyError.message?.includes('Verification failed')) {
               setState({ status: 'polling' });
               
-              // We pass a getter function to pollForPlanUpgrade so it uses the freshest token if any
+              // Poll /me for up to 100 s — enough for a Razorpay webhook to arrive
               const upgraded = await pollForPlanUpgrade(() => useAuthStore.getState().accessToken || '');
               
               if (upgraded) {
                 await proceedToSuccess(planDuration);
               } else {
-                setState({ status: 'error', message: 'Payment verification timed out. If money was deducted, it will be automatically refunded or credited. Contact support with order ID: ' + orderData.orderId });
+                // Last resort: try verify one final time.
+                // By now the webhook has had 100 s to run, which means the payment
+                // is marked SUCCESS on the server. The verify endpoint returns 200
+                // idempotently for already-SUCCESS payments, so this will succeed
+                // even without re-sending the signature — we still send it for
+                // consistency; the server just won't re-process it.
+                try {
+                  await verifyPaymentAPI({
+                    razorpayOrderId: response.razorpay_order_id,
+                    razorpayPaymentId: response.razorpay_payment_id,
+                    razorpaySignature: response.razorpay_signature,
+                  }, accessToken, 1); // single attempt, no inner retry
+                  await proceedToSuccess(planDuration);
+                } catch {
+                  // Final failure — give the user an accurate, reassuring message.
+                  // The payment IS captured by Razorpay. It is NOT lost.
+                  // The plan will be activated once our webhook processes the event.
+                  setState({
+                    status: 'error',
+                    message:
+                      'Your payment was received by Razorpay but our server took too long to confirm it. ' +
+                      'Your plan will be activated automatically within a few minutes. ' +
+                      'If it is not activated after 10 minutes, please contact support with Order ID: ' +
+                      orderData.orderId,
+                  });
+                }
               }
             } else {
-              // 400 signature mismatch etc
-              setState({ status: 'error', message: 'Payment verification failed. Contact support with order ID: ' + orderData.orderId });
+              // 400 signature mismatch or other definitive error
+              setState({ status: 'error', message: 'Payment verification failed. Contact support with Order ID: ' + orderData.orderId });
             }
           }
         },
         modal: {
           ondismiss: () => {
             clearUpiPoll(); // cancel background UPI poll
+            // Also clear recovery key — user dismissed the modal intentionally
+            sessionStorage.removeItem(UPI_RECOVERY_KEY);
             setState({ status: 'cancelled' });
           }
         }
@@ -114,10 +219,22 @@ export function useCheckout() {
 
       setState({ status: 'awaiting_payment' });
 
+      // ── Save pending order to sessionStorage BEFORE opening the modal ───────
+      // If the user selects UPI on Android, Razorpay does a full-page redirect
+      // to the UPI app. The page is DESTROYED — React state, setInterval, and
+      // the Razorpay handler all disappear. By saving the order info here, the
+      // UPI recovery effect (on mount) can detect the return and poll for upgrade.
+      const recoveryData: PendingOrderData = {
+        planDuration,
+        orderId: orderData.orderId,
+        savedAt: Date.now(),
+      };
+      sessionStorage.setItem(UPI_RECOVERY_KEY, JSON.stringify(recoveryData));
+
       // Start a background poll for Android UPI redirect flow:
       // On some UPI apps Razorpay switches to a full-page redirect and the
       // handler callback never fires. This poll detects the plan upgrade
-      // when the user comes back to the page.
+      // when the user comes back to the page (if page is NOT destroyed).
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
       upiPollRef.current = setInterval(async () => {
         const token = useAuthStore.getState().accessToken || '';
@@ -130,6 +247,7 @@ export function useCheckout() {
           const body = await res.json();
           if (body.data?.plan === 'PAID') {
             clearUpiPoll();
+            sessionStorage.removeItem(UPI_RECOVERY_KEY);
             await proceedToSuccess(planDuration);
           }
         } catch { /* network error — keep polling */ }
@@ -139,6 +257,7 @@ export function useCheckout() {
       rzp.on('payment.failed', function (response: any) {
         // This is handled by razorpay UI itself, but we can catch it
         console.error('Payment failed', response.error);
+        sessionStorage.removeItem(UPI_RECOVERY_KEY);
         setState({ status: 'error', message: response.error.description || 'Payment failed' });
       });
       rzp.open();
