@@ -202,43 +202,81 @@ paymentsRouter.post('/webhook', async (req: Request, res: Response) => {
   const orderId = req.body.payload?.payment?.entity?.order_id
     ?? req.body.payload?.order?.entity?.id;
 
+  // Extract razorpayPaymentId from webhook payload so we can persist it.
+  // The /verify endpoint sets this when the frontend flow works; the webhook
+  // is the fallback for UPI redirect flows where the page is destroyed.
+  const razorpayPaymentId: string | undefined =
+    req.body.payload?.payment?.entity?.id;
+
   if ((event === 'payment.captured' || event === 'order.paid') && orderId) {
-    const payment = await prisma.payment.findUnique({ where: { razorpayOrderId: orderId } });
+    // ── CRITICAL: wrap all DB operations in try/catch ─────────────────────────
+    // Without this, any Prisma error causes an unhandled promise rejection.
+    // The global unhandledRejection handler in index.ts swallows it silently,
+    // no response is sent to Razorpay, Razorpay times out and marks delivery
+    // as failed, then retries — all retries fail the same way.
+    // Payment stays PENDING forever even though money was captured.
+    try {
+      const payment = await prisma.payment.findUnique({ where: { razorpayOrderId: orderId } });
 
-    // Idempotency: only apply if PENDING
-    if (payment && payment.status === 'PENDING') {
-      const planExpiresAt = new Date();
-      planExpiresAt.setDate(planExpiresAt.getDate() + payment.planDuration);
+      // Idempotency: only apply if PENDING
+      if (payment && payment.status === 'PENDING') {
+        const planExpiresAt = new Date();
+        planExpiresAt.setDate(planExpiresAt.getDate() + payment.planDuration);
 
-      // Fetch current paidAt to avoid overwriting an earlier timestamp
-      const existingUser = await prisma.user.findUnique({
-        where: { id: payment.userId },
-        select: { paidAt: true },
-      });
-
-      await prisma.$transaction([
-        prisma.payment.update({
-          where: { razorpayOrderId: orderId },
-          data: { status: 'SUCCESS' },
-        }),
-        prisma.user.update({
+        // Fetch current paidAt to avoid overwriting an earlier timestamp
+        const existingUser = await prisma.user.findUnique({
           where: { id: payment.userId },
-          data: {
-            plan: 'PAID',
-            planExpiresAt,
-            // paidAt: set once on first payment, never overwritten
-            ...(existingUser?.paidAt == null && { paidAt: new Date() }),
-          },
-        }),
-      ]);
+          select: { paidAt: true },
+        });
+
+        await prisma.$transaction([
+          prisma.payment.update({
+            where: { razorpayOrderId: orderId },
+            data: {
+              status: 'SUCCESS',
+              // Persist the payment ID from the webhook so reconciliation queries
+              // work even when the frontend verify flow never completed (e.g. UPI
+              // redirect on Android destroys the page before handler() fires).
+              ...(razorpayPaymentId && { razorpayPaymentId }),
+            },
+          }),
+          prisma.user.update({
+            where: { id: payment.userId },
+            data: {
+              plan: 'PAID',
+              planExpiresAt,
+              // paidAt: set once on first payment, never overwritten
+              ...(existingUser?.paidAt == null && { paidAt: new Date() }),
+            },
+          }),
+        ]);
+
+        console.log(`[Webhook] Payment ${orderId} → SUCCESS via ${event}`);
+      }
+    } catch (err) {
+      // Log the error but still respond 200 so Razorpay doesn't keep retrying
+      // a webhook that will fail for the same structural reason (e.g., DB
+      // constraint). For transient errors (connection drop), Razorpay will
+      // retry automatically on a 5xx — so return 500 only for those.
+      console.error('[Webhook] DB error processing payment event:', err);
+
+      // Respond 500 for transient errors → Razorpay will retry
+      res.status(500).json({ error: 'Webhook processing failed — will retry' });
+      return;
     }
   }
 
   if (event === 'payment.failed' && orderId) {
-    await prisma.payment.updateMany({
-      where: { razorpayOrderId: orderId, status: 'PENDING' },
-      data: { status: 'FAILED' },
-    });
+    try {
+      await prisma.payment.updateMany({
+        where: { razorpayOrderId: orderId, status: 'PENDING' },
+        data: { status: 'FAILED' },
+      });
+    } catch (err) {
+      console.error('[Webhook] DB error processing payment.failed event:', err);
+      res.status(500).json({ error: 'Webhook processing failed — will retry' });
+      return;
+    }
   }
 
   res.json({ status: 'ok' });
