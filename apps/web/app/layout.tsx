@@ -45,8 +45,6 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
         <link rel="apple-touch-icon" href="/icon-512.png" />
         <meta name="theme-color" content="#0f0f13" />
-      </head>
-      <body className="min-h-full flex flex-col">
         <Script
           id="theme-script"
           strategy="beforeInteractive"
@@ -60,6 +58,8 @@ export default function RootLayout({
             `,
           }}
         />
+      </head>
+      <body className="min-h-full flex flex-col">
         <Script
           id="sw-script"
           strategy="afterInteractive"

@@ -256,6 +256,11 @@ export default function NoteCard({ note, user, onClick }: NoteCardProps) {
           border: 1px solid var(--border);
           padding: 0.25rem 0.5rem;
           border-radius: 6px;
+          /* Prevent long subject names from overflowing the card */
+          max-width: 120px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
         .paid-badge {
           font-size: 0.65rem;
@@ -312,6 +317,27 @@ export default function NoteCard({ note, user, onClick }: NoteCardProps) {
           animation: spin 0.7s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Mobile overrides ──────────────────────────────────── */
+        @media (max-width: 768px) {
+          .note-card-image-container {
+            height: 80px;
+          }
+          .note-card-inner {
+            padding: 0.75rem;
+          }
+          .note-title {
+            font-size: 1rem;
+            margin-bottom: 0.35rem;
+          }
+          .note-desc {
+            margin-bottom: 0.875rem;
+            font-size: 0.8rem;
+          }
+          .note-card-image-container.no-thumbnail::after {
+            font-size: 1.75rem;
+          }
+        }
       `}</style>
     </div>
   );
