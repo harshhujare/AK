@@ -75,8 +75,16 @@ function getPersister() {
     // uncaught QuotaExceededError. Wrapping setItem means a full cache still
     // works in-memory; only disk persistence is lost gracefully instead of
     // crashing the persister's write loop.
+    // NOTE: Spreading window.localStorage doesn't work — Storage prototype
+    // methods are non-enumerable, so the spread yields an empty object and
+    // calls like storage.getItem() throw "not a function". Instead, we build
+    // an explicit proxy that delegates every Storage method individually.
     const safeStorage: Storage = {
-      ...window.localStorage,
+      get length() { return window.localStorage.length; },
+      key: (index: number) => window.localStorage.key(index),
+      getItem: (key: string) => window.localStorage.getItem(key),
+      removeItem: (key: string) => window.localStorage.removeItem(key),
+      clear: () => window.localStorage.clear(),
       setItem: (key: string, value: string) => {
         try {
           window.localStorage.setItem(key, value);
