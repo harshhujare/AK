@@ -33,6 +33,8 @@ interface AuthState {
   initialize: () => Promise<void>;
   setAccessToken: (accessToken: string) => void;
   refresh: () => Promise<void>;
+  /** Re-fetches /me and updates Zustand + localStorage. Returns true if plan is PAID. */
+  refreshUserPlan: () => Promise<boolean>;
 }
 
 const readStoredSession = () => {
@@ -136,16 +138,49 @@ const useAuthStore = create<AuthState>((set, get) => ({
           // the next page load will re-run initialize() and refresh properly.
         });
       } else {
-        // Token still valid → fire /me in background to get fresh plan/role data
-        apiClient.get('/api/auth/me')
+        // Token still valid → fire /me in background to get fresh plan/role data.
+        //
+        // ── Bug 2 fix: add an 8 s AbortController timeout on this call ───────────
+        // If Neon is cold (scale-to-zero), this call stalls for 10–25 s before the
+        // DATABASE_WAKING 503 response arrives. Without a timeout shorter than the
+        // 30 s axios default, the app silently hangs on every cold boot after a user
+        // has been logged in for a while. With an 8 s timeout we abort early, keep
+        // the stored user in Zustand, and let the user continue without blocking.
+        const meController = new AbortController();
+        const meTimer = setTimeout(() => meController.abort(), 8000);
+
+        apiClient.get('/api/auth/me', { signal: meController.signal })
           .then(({ data }) => {
+            clearTimeout(meTimer);
             const freshUser = data.data as User;
+
+            // ── Plan-downgrade guard ──────────────────────────────────────────
+            // This background /me was fired at page-load time (before payment).
+            // On slow mobile connections it can take 10–30 s to resolve — long
+            // enough for the user to pay and have refresh() upgrade the in-memory
+            // plan to 'PAID'. If we blindly apply this stale response, it would
+            // overwrite the PAID plan back to FREE and re-show the paywall.
+            //
+            // Rule: never let a background /me step the plan backwards.
+            // If the current in-memory user is already on a more-privileged plan
+            // than what this response reports, silently drop the update.
+            const currentPlan = get().user?.plan;
+            const isPlanDowngrade =
+              currentPlan === 'PAID' && freshUser.plan !== 'PAID';
+
+            if (isPlanDowngrade) {
+              // The user paid while this request was in-flight — keep the
+              // upgraded plan; discard the stale pre-payment response.
+              return;
+            }
+
             localStorage.setItem('user', JSON.stringify(freshUser));
             set({ user: freshUser });
           })
           .catch((error) => {
-            if (isTransientAuthError(error)) {
-              // Transient error (network/DB wakeup) — keep showing stored user, retry later
+            clearTimeout(meTimer);
+            if (isTransientAuthError(error) || error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
+              // Timed out or transient DB wakeup — keep showing stored user, retry on next load
               return;
             }
             // Real auth failure (token rejected server-side) → clear session
@@ -155,19 +190,24 @@ const useAuthStore = create<AuthState>((set, get) => ({
           });
       }
     } else {
-      // No stored session — try a silent refresh via httpOnly cookie
+      // No stored session — try a silent refresh via httpOnly cookie.
+      //
+      // ── Bug 1 fix: set isInitialized: true optimistically before awaiting refresh()
+      // Without this, isInitialized stays false until the finally block, blocking
+      // all page rendering. On 3G / weak 4G, the axios default 30 s timeout means
+      // the user sees a completely blank screen for up to 30 s on first visit.
+      // Setting true here immediately lets the UI render a logged-out state while
+      // the silent refresh runs in the background.
+      set({ isInitialized: true });
       try {
         await get().refresh();
       } catch (error) {
-        if (isTransientAuthError(error)) {
-          // Transient: keep as logged-out but don't block
-        } else {
+        if (!isTransientAuthError(error)) {
           localStorage.removeItem('accessToken');
           localStorage.removeItem('user');
           set({ user: null, accessToken: null });
         }
-      } finally {
-        set({ isInitialized: true });
+        // Transient / offline: keep logged-out state, don't block
       }
     }
   },
@@ -185,6 +225,22 @@ const useAuthStore = create<AuthState>((set, get) => ({
       localStorage.setItem('user', JSON.stringify(user));
     }
     set({ user, accessToken: newToken });
+  },
+
+  refreshUserPlan: async () => {
+    const { accessToken } = get();
+    if (!accessToken) return false;
+    try {
+      const meResponse = await apiClient.get('/api/auth/me');
+      const freshUser = meResponse.data.data as User;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('user', JSON.stringify(freshUser));
+      }
+      set({ user: freshUser });
+      return freshUser.plan === 'PAID';
+    } catch {
+      return false;
+    }
   },
 }));
 

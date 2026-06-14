@@ -1,9 +1,10 @@
 // AjitSir Academy — Minimal Service Worker
 // Version: bump SHELL_VERSION when deploying new Next.js build to force cache refresh
-const SHELL_VERSION = 'v1';
+const SHELL_VERSION = 'v5';
 const SHELL_CACHE = `ajitsir-shell-${SHELL_VERSION}`;
 const THUMB_CACHE = 'ajitsir-thumbs-v1';
 const OFFLINE_CACHE = 'ajitsir-offline-v1';
+const API_CACHE = 'ajitsir-api-v1'; // GET /api/* offline fallback
 
 // ─── Routes that must NEVER be served from cache ─────────────────────────────
 // These are security-critical: auth, payments, premium PDF bytes, and admin data.
@@ -19,23 +20,30 @@ const NETWORK_ONLY_PATTERNS = [
 // ─── App shell pages to pre-cache on install ─────────────────────────────────
 const SHELL_PAGES = ['/', '/notes', '/plans', '/account', '/help', '/offline.html'];
 
-// ─── Install: cache offline fallback immediately ───────────────────────────────
+// ─── Install: cache offline fallback and shell pages immediately ───────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(OFFLINE_CACHE).then((cache) => cache.add('/offline.html'))
+    Promise.all([
+      caches.open(OFFLINE_CACHE).then((cache) => cache.add('/offline.html')),
+      caches.open(SHELL_CACHE).then((cache) => cache.addAll(SHELL_PAGES))
+    ])
   );
   // Take control immediately — don't wait for old SW to die
   self.skipWaiting();
 });
 
-// ─── Activate: wipe outdated shell caches ─────────────────────────────────────
+// ─── Activate: wipe outdated caches ────────────────────────────────────────────
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
         keys.map((key) => {
-          // Delete old shell caches (different version) but keep thumbs + offline
+          // Delete old shell caches (different version) but keep thumbs + offline + api
           if (key.startsWith('ajitsir-shell-') && key !== SHELL_CACHE) {
+            return caches.delete(key);
+          }
+          // Delete old API cache versions (version is in the name)
+          if (key.startsWith('ajitsir-api-') && key !== API_CACHE) {
             return caches.delete(key);
           }
         })
@@ -49,10 +57,19 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Only handle same-origin requests
-  if (url.origin !== self.location.origin) return;
+  // Only handle same-origin requests AND allowed CDNs
+  const isSameOrigin = url.origin === self.location.origin;
+  const isUnpkg = url.hostname === 'unpkg.com';
+  
+  if (!isSameOrigin && !isUnpkg) return;
 
   const pathname = url.pathname;
+
+  // 0. CDN Assets (like pdf.worker.min.mjs) — Cache-First
+  if (isUnpkg) {
+    event.respondWith(cacheFirst(request, SHELL_CACHE));
+    return;
+  }
 
   // 1. NetworkOnly — security-critical routes, never touch cache
   if (NETWORK_ONLY_PATTERNS.some((pattern) => pattern.test(pathname))) {
@@ -78,7 +95,28 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 5. Everything else (other API endpoints, fonts, etc.) — network only
+  // 5. Same-origin GET /api/* — NetworkFirst with API cache fallback.
+  //
+  // WHY: React Query's offlineFirst mode keeps data in-memory across renders but
+  // not across hard refreshes. If the device is offline on a hard refresh, RQ
+  // has no data and enters a loading/error state even though the response was
+  // fetched earlier in the session. Caching GET /api/* here at the SW layer means
+  // the last-seen API response is always available, even after a hard refresh.
+  //
+  // NETWORK_ONLY_PATTERNS (auth, payments, PDF stream, admin) are already
+  // excluded above — only safe idempotent public GETs reach this branch.
+  // POST / non-GET requests fall through to the browser (case 6).
+  if (
+    isSameOrigin &&
+    request.method === 'GET' &&
+    pathname.startsWith('/api/')
+  ) {
+    // 10 s timeout — enough for Render cold start, fast enough to feel responsive
+    event.respondWith(networkFirstWithCache(request, API_CACHE, 60 * 60));
+    return;
+  }
+
+  // 6. Everything else (non-GET API calls, fonts, etc.) — network only
   // Do not intercept — let the browser handle normally
 });
 
@@ -97,14 +135,22 @@ async function cacheFirst(request, cacheName) {
   return response;
 }
 
-// ─── Strategy: NetworkFirst with cache fallback ────────────────────────────────
+// ─── Strategy: NetworkFirst with cache fallback ──────────────────────────────────
 // Used for thumbnails — prefer fresh network, fall back to cache if offline.
 // maxAgeSeconds: stored entries older than this are considered stale and refreshed.
+// A 15 s AbortController timeout prevents mobile data hangs from causing the
+// thumbnail fetch to silently stall; we fall through to the cache instead.
+const THUMB_TIMEOUT_MS = 15000;
+
 async function networkFirstWithCache(request, cacheName, maxAgeSeconds) {
   const cache = await caches.open(cacheName);
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), THUMB_TIMEOUT_MS);
+
   try {
-    const response = await fetch(request);
+    const response = await fetch(request, { signal: controller.signal });
+    clearTimeout(timer);
     if (response.ok) {
       // Store with a timestamp header so we can check age later
       const responseToCache = response.clone();
@@ -120,7 +166,8 @@ async function networkFirstWithCache(request, cacheName, maxAgeSeconds) {
     }
     return response;
   } catch {
-    // Offline — try cache
+    clearTimeout(timer);
+    // Offline or timed out — try cache
     const cached = await cache.match(request);
     if (cached) {
       const cachedAt = parseInt(cached.headers.get('sw-cached-at') || '0');
@@ -132,27 +179,41 @@ async function networkFirstWithCache(request, cacheName, maxAgeSeconds) {
   }
 }
 
-// ─── Strategy: Navigation handler ─────────────────────────────────────────────
-// For page navigations: try network, fall back to cached page, then offline.html.
+// ─── Strategy: Navigation handler ───────────────────────────────────────────────────
+// For page navigations: try network (with a timeout), fall back to cached page,
+// then offline.html.
+//
+// WHY timeout?
+// On mobile data (3G / weak 4G) fetch() can hang for 20-30 s before the OS
+// decides the connection is dead. Without a timeout the browser shows a blank
+// screen for that entire period and then serves offline.html. With a 10 s
+// AbortController timeout we fail fast, serve the cached page, and the user
+// sees content immediately. If the cached page is also missing, offline.html
+// is shown — which is the same result but reached MUCH faster.
+const NAV_TIMEOUT_MS = 10000; // 10 s — generous for slow 3G, fast enough to feel responsive
+
 async function navigationHandler(request) {
   const cache = await caches.open(SHELL_CACHE);
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), NAV_TIMEOUT_MS);
+
   try {
-    const response = await fetch(request);
+    const response = await fetch(request, { signal: controller.signal });
+    clearTimeout(timer);
     if (response.ok) {
       cache.put(request, response.clone()); // update shell cache while online
     }
     return response;
   } catch {
-    // Offline — try exact URL match first
+    clearTimeout(timer);
+    // Network failed or timed out — try exact URL match first
     const cachedPage = await cache.match(request);
     if (cachedPage) return cachedPage;
 
-    // Fall back to cached homepage (Next.js app shell)
-    const home = await cache.match('/');
-    if (home) return home;
-
-    // Last resort — offline.html
+    // Do NOT fall back to `/` (Home) because Next.js HTML is route-specific.
+    // Serving home HTML for `/notes` causes hydration bugs.
+    // Instead, fall back to the dedicated offline page.
     const offline = await caches.match('/offline.html');
     return offline || new Response('You are offline', {
       status: 503,

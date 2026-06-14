@@ -10,9 +10,9 @@ async function checkAndDowngradePlan<T extends { id: string; plan: string; planE
   if (user.plan === 'PAID' && user.planExpiresAt && user.planExpiresAt < new Date()) {
     await withRetry(() => prisma.user.update({
       where: { id: user.id },
-      data: { plan: 'FREE' }
+      data: { plan: 'FREE', planExpiresAt: null },  // also reset stale expiry date
     }));
-    return { ...user, plan: 'FREE' };
+    return { ...user, plan: 'FREE', planExpiresAt: null };
   }
   return user;
 }
@@ -103,7 +103,18 @@ authRouter.post('/login', asyncHandler(async (req: Request, res: Response) => {
   res.cookie('refreshToken', refreshToken, COOKIE_OPTS);
 
   res.json({
-    data: { accessToken, user: { id: user.id, name: user.name, email: user.email, role: user.role, plan: user.plan } },
+    data: {
+      accessToken,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        plan: user.plan,
+        paidAt: user.paidAt ?? null,
+        planExpiresAt: user.planExpiresAt ?? null,
+      },
+    },
   });
 }));
 
@@ -141,7 +152,18 @@ authRouter.post('/google', asyncHandler(async (req: Request, res: Response) => {
   res.cookie('refreshToken', refreshToken, COOKIE_OPTS);
 
   res.json({
-    data: { accessToken, user: { id: user.id, name: user.name, email: user.email, role: user.role, plan: user.plan } },
+    data: {
+      accessToken,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        plan: user.plan,
+        paidAt: user.paidAt ?? null,
+        planExpiresAt: user.planExpiresAt ?? null,
+      },
+    },
   });
 }));
 
@@ -206,7 +228,7 @@ authRouter.get('/me', asyncHandler(async (req: Request, res: Response) => {
   try {
     let user = await withRetry(() => prisma.user.findUnique({
       where: { id: payload.userId },
-      select: { id: true, name: true, email: true, role: true, plan: true, planExpiresAt: true, createdAt: true },
+      select: { id: true, name: true, email: true, role: true, plan: true, planExpiresAt: true, paidAt: true, createdAt: true },
     }));
     if (!user) {
       res.status(404).json({ error: 'User not found' });

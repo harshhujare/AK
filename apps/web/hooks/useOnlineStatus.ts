@@ -1,29 +1,93 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+
+// How long to wait for the probe response before treating as offline (ms).
+// Set to 10 s — 2G/3G round-trips in rural Maharashtra can easily exceed 5 s.
+const PROBE_TIMEOUT_MS = 10_000;
+
+// Minimum gap between back-to-back probes (ms) — avoids hammering on flaky links
+const PROBE_DEBOUNCE_MS = 3000;
 
 /**
- * Reactive online/offline status.
- * Uses navigator.onLine for the initial value, then listens to
- * window 'online' / 'offline' events to update reactively.
+ * Probes real connectivity by fetching a tiny, no-cache endpoint.
+ *
+ * Why not navigator.onLine?
+ * On Android/Chrome in PWA or on mobile data, navigator.onLine only reflects
+ * whether the OS has a radio link — it does NOT verify actual internet reachability.
+ * The browser can also fire the "offline" event and then never fire "online" again
+ * even after the connection recovers, leaving navigator.onLine stale-false for the
+ * entire session. A real HTTP probe is the only reliable cross-platform check.
+ */
+async function probeConnectivity(): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+
+  // Derive probe URL from the API base so it works in every environment
+  // (localhost, staging, production) without hardcoding.
+  const apiBase =
+    process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+  const probeUrl = `${apiBase}/api/ping`;
+
+  try {
+    // HEAD avoids downloading a response body.
+    // cache: 'no-store' forces a real network round-trip even if SW intercepts.
+    // Using /api/ping instead of /sw.js avoids triggering a SW update check
+    // which adds latency and unpredictable behaviour on some Chrome versions.
+    const res = await fetch(probeUrl, {
+      method: 'HEAD',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    return res.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Reactive online/offline status backed by a real HTTP connectivity probe.
+ *
+ * - Initialises to true (optimistic) to avoid a flash-of-offline on load.
+ * - On mount, immediately runs a probe to correct the initial state.
+ * - Re-probes whenever the browser fires "online" or "offline" events.
+ * - Debounces rapid consecutive probes (e.g. network handover on mobile).
  */
 export function useOnlineStatus(): boolean {
-  const [isOnline, setIsOnline] = useState(
-    typeof navigator !== 'undefined' ? navigator.onLine : true
-  );
+  // Start optimistic — avoids incorrectly blocking the UI on first render.
+  // The mount-time probe corrects this within milliseconds.
+  const [isOnline, setIsOnline] = useState(true);
+
+  const runProbe = useCallback(async () => {
+    const result = await probeConnectivity();
+    setIsOnline(result);
+  }, []);
 
   useEffect(() => {
-    const setOnline = () => setIsOnline(true);
-    const setOffline = () => setIsOnline(false);
+    // Probe immediately on mount so the initial state is accurate
+    runProbe();
 
-    window.addEventListener('online', setOnline);
-    window.addEventListener('offline', setOffline);
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleProbe = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(runProbe, PROBE_DEBOUNCE_MS);
+    };
+
+    // When the browser fires "online" don't trust it blindly — probe first.
+    // When the browser fires "offline" we can trust it immediately (the OS
+    // is certain there's no link), but we still probe to be sure.
+    window.addEventListener('online', scheduleProbe);
+    window.addEventListener('offline', scheduleProbe);
 
     return () => {
-      window.removeEventListener('online', setOnline);
-      window.removeEventListener('offline', setOffline);
+      window.removeEventListener('online', scheduleProbe);
+      window.removeEventListener('offline', scheduleProbe);
+      if (debounceTimer) clearTimeout(debounceTimer);
     };
-  }, []);
+  }, [runProbe]);
 
   return isOnline;
 }

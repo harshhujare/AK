@@ -69,8 +69,34 @@ let _persister: ReturnType<typeof createSyncStoragePersister> | null = null;
 
 function getPersister() {
   if (!_persister && typeof window !== 'undefined') {
+    // ── Bug 5 fix: wrap setItem in a try/catch for QuotaExceededError ──────
+    // On low-end Android (some WebViews cap localStorage at ~5 MB per origin),
+    // a large dehydrated cache blob silently breaks all persistence with an
+    // uncaught QuotaExceededError. Wrapping setItem means a full cache still
+    // works in-memory; only disk persistence is lost gracefully instead of
+    // crashing the persister's write loop.
+    // NOTE: Spreading window.localStorage doesn't work — Storage prototype
+    // methods are non-enumerable, so the spread yields an empty object and
+    // calls like storage.getItem() throw "not a function". Instead, we build
+    // an explicit proxy that delegates every Storage method individually.
+    const safeStorage: Storage = {
+      get length() { return window.localStorage.length; },
+      key: (index: number) => window.localStorage.key(index),
+      getItem: (key: string) => window.localStorage.getItem(key),
+      removeItem: (key: string) => window.localStorage.removeItem(key),
+      clear: () => window.localStorage.clear(),
+      setItem: (key: string, value: string) => {
+        try {
+          window.localStorage.setItem(key, value);
+        } catch (err) {
+          // QuotaExceededError — log once and continue without persisting.
+          // The in-memory React Query cache is unaffected.
+          console.warn('[RQ Persister] localStorage quota exceeded — cache not persisted:', err);
+        }
+      },
+    };
     _persister = createSyncStoragePersister({
-      storage: window.localStorage,
+      storage: safeStorage,
       key: 'rq-cache',
       // Write to localStorage at most every 1s to avoid thrashing on rapid updates
       throttleTime: 1000,
@@ -126,7 +152,20 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
 
             // Respect per-query TTL — don't persist stale entries
             const ttl = getQueryTTL(query.queryKey);
-            return Date.now() - updatedAt < ttl;
+            if (Date.now() - updatedAt >= ttl) return false;
+
+            // ── Bug 5 fix: cap notes cache to page 1 only ────────────────────
+            // Notes entries include pagination metadata + per-page note payloads.
+            // If a user browses multiple pages, the blob grows large and can hit
+            // the ~5 MB localStorage limit on low-end Android WebViews.
+            // Only persisting page 1 ensures the most useful data (first page)
+            // is available on hard refresh while keeping the cache blob small.
+            if (key === 'notes') {
+              const page = query.queryKey[2]; // ['notes', subjectId, page, limit, search]
+              if (page !== 1 && page !== undefined) return false;
+            }
+
+            return true;
           },
         },
       }}
