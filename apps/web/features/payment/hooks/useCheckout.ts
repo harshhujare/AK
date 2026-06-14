@@ -41,6 +41,7 @@ interface PendingOrderData {
 export function useCheckout() {
   const [state, setState] = useState<CheckoutState>({ status: 'idle' });
   const { user, accessToken, refresh } = useAuthStore();
+  const { refreshUserPlan } = useAuthStore.getState();
   const router = useRouter();
   // Ref to the background UPI poll — keeps the interval ID across renders
   const upiPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -307,17 +308,19 @@ export function useCheckout() {
 
     setState({ status: 'refreshing_token' });
     try {
+      // Step 1: Get a fresh JWT with plan: 'PAID' embedded
       await refresh();
 
-      // Poll Zustand until plan is confirmed as PAID (up to 10 s on slow 4G).
-      // refresh() calls /refresh then /me sequentially — both can be slow on
-      // mobile; the old 100ms setTimeout was not enough on real devices.
-      let freshUser = useAuthStore.getState().user;
-      for (let i = 0; i < 20 && freshUser?.plan !== 'PAID'; i++) {
+      // Step 2: Verify plan is actually PAID — poll server (not stale Zustand)
+      // for up to 5 s to handle slow DB commits after /verify.
+      let isPaid = useAuthStore.getState().user?.plan === 'PAID';
+      for (let i = 0; i < 10 && !isPaid; i++) {
         await new Promise(r => setTimeout(r, 500));
-        freshUser = useAuthStore.getState().user;
+        // Re-fetch from server instead of just checking stale in-memory state
+        isPaid = await useAuthStore.getState().refreshUserPlan();
       }
 
+      const freshUser = useAuthStore.getState().user;
       const planLabel = planDurationToLabel(parseInt(planDuration, 10));
 
       setState({ status: 'success' });

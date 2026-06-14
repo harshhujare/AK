@@ -33,6 +33,8 @@ interface AuthState {
   initialize: () => Promise<void>;
   setAccessToken: (accessToken: string) => void;
   refresh: () => Promise<void>;
+  /** Re-fetches /me and updates Zustand + localStorage. Returns true if plan is PAID. */
+  refreshUserPlan: () => Promise<boolean>;
 }
 
 const readStoredSession = () => {
@@ -223,6 +225,22 @@ const useAuthStore = create<AuthState>((set, get) => ({
       localStorage.setItem('user', JSON.stringify(user));
     }
     set({ user, accessToken: newToken });
+  },
+
+  refreshUserPlan: async () => {
+    const { accessToken } = get();
+    if (!accessToken) return false;
+    try {
+      const meResponse = await apiClient.get('/api/auth/me');
+      const freshUser = meResponse.data.data as User;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('user', JSON.stringify(freshUser));
+      }
+      set({ user: freshUser });
+      return freshUser.plan === 'PAID';
+    } catch {
+      return false;
+    }
   },
 }));
 
