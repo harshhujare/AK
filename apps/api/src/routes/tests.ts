@@ -7,7 +7,9 @@ import {
   CreateQuestionSchema,
   SubmitAttemptSchema,
 } from '@ajitsir/shared';
-import type { Question, Prisma, $Enums } from '@prisma/client';
+// Import Question for type annotation. TestType is imported directly to avoid
+// the $Enums namespace which can fail in IDEs with a stale TS server cache.
+import type { Question, Prisma, TestType } from '@prisma/client';
 
 
 export const testsRouter = Router();
@@ -38,7 +40,7 @@ testsRouter.get('/', async (req: Request, res: Response) => {
   };
 
   if (type) {
-    where.type = type as $Enums.TestType;
+    where.type = type as TestType;
   }
 
   if (subjectId) {
