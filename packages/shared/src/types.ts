@@ -6,6 +6,7 @@ export type AnnouncementType = 'TEXT' | 'VIDEO';
 export type TicketType = 'BUG_REPORT' | 'PAYMENT_ISSUE' | 'CONTENT_QUERY' | 'GENERAL';
 export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
 export type NoteAccessType = 'TIMED' | 'LIFETIME';
+export type TestType = 'DAILY' | 'PREDEFINED' | 'SUBJECT';
 
 // ─── Core Models ─────────────────────────────────────────────────────────────
 export interface User {
@@ -50,7 +51,14 @@ export interface Test {
   subject?: Subject;
   isPaid: boolean;
   createdAt: string;
+  updatedAt: string;
   _count?: { questions: number };
+  // ── Test type & scheduling ──
+  type: TestType;
+  timeLimitSec: number | null;   // null = untimed
+  scheduledAt:  string | null;   // ISO string — DAILY: the day; PREDEFINED: window start
+  expiresAt:    string | null;   // ISO string — PREDEFINED: window end
+  isPublished:  boolean;         // false = draft, invisible to students
 }
 
 export interface TestWithQuestions extends Test {
@@ -65,7 +73,7 @@ export interface TestAttempt {
   answers: Record<string, string>; // { questionId: selectedOption }
   score: number;
   totalMarks: number;
-  timeTaken: number; // seconds
+  timeTaken: number | null; // seconds — null for untimed tests
   completedAt: string;
 }
 
@@ -81,6 +89,12 @@ export interface AttemptBreakdownItem {
 export interface AttemptResult extends TestAttempt {
   percentage: number;
   breakdown: AttemptBreakdownItem[];
+}
+
+export interface PercentileResult {
+  percentile: number | null;      // null when < 10 total attempts exist
+  total: number;                   // total attempts for this test
+  reason?: 'insufficient_data';    // present when percentile is null
 }
 
 export interface Note {

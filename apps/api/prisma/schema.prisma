@@ -36,6 +36,12 @@ enum AnnouncementType {
   VIDEO
 }
 
+enum TestType {
+  DAILY       // One per day — scheduledAt = that calendar day
+  PREDEFINED  // Manually scheduled with a specific date window
+  SUBJECT     // Always available, filtered by subject
+}
+
 enum NoteAccessType {
   TIMED     // access expires with user's planExpiresAt
   LIFETIME  // access granted forever once user has ever successfully paid
@@ -82,6 +88,17 @@ model Test {
   attempts    TestAttempt[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+
+  // ── Test type & scheduling ──────────────────────────────────────────────────
+  type         TestType  @default(SUBJECT)
+  timeLimitSec Int?      // null = untimed. 1800 = 30 min, 2700 = 45 min
+  scheduledAt  DateTime? // DAILY: date it is live. PREDEFINED: window start.
+  expiresAt    DateTime? // PREDEFINED only: when the window closes.
+  isPublished  Boolean   @default(false) // false = draft, invisible to students
+
+  // ── Performance indexes ─────────────────────────────────────────────────────
+  @@index([type, scheduledAt])
+  @@index([subjectId, isPublished])
 }
 
 model Question {
@@ -104,8 +121,12 @@ model TestAttempt {
   answers     Json     // { questionId: selectedOption }
   score       Int
   totalMarks  Int
-  timeTaken   Int      // seconds
+  timeTaken   Int?     // seconds — null for untimed test submissions
   completedAt DateTime @default(now())
+
+  // ── Performance indexes ─────────────────────────────────────────────────────
+  @@index([testId, score])        // percentile: WHERE testId=? ORDER BY score
+  @@index([userId, completedAt])  // history: WHERE userId=? ORDER BY completedAt DESC
 }
 
 model Note {

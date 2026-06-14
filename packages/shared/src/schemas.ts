@@ -18,30 +18,37 @@ export const GoogleAuthSchema = z.object({
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 export const CreateTestSchema = z.object({
-  title: z.string().min(3).max(200),
-  description: z.string().max(500).optional(),
-  subjectId: z.string().cuid(),
-  isPaid: z.boolean().default(false),
+  title:        z.string().min(3).max(200),
+  description:  z.string().max(1000).optional(),
+  subjectId:    z.string().cuid(),
+  isPaid:       z.boolean().default(false),
+  // ── Scheduling & type (Phase 1 additions) ──
+  type:         z.enum(['DAILY', 'PREDEFINED', 'SUBJECT']).default('SUBJECT'),
+  timeLimitSec: z.number().int().positive().optional(), // null = untimed
+  scheduledAt:  z.string().datetime({ offset: true }).optional(),
+  expiresAt:    z.string().datetime({ offset: true }).optional(),
+  isPublished:  z.boolean().default(false),
 });
 
 export const UpdateTestSchema = CreateTestSchema.partial();
 
+// Option text capped at 500 chars — prevents oversized JSON blobs in Question.options
+const QuestionOptionSchema = z.object({
+  id:   z.enum(['A', 'B', 'C', 'D']),
+  text: z.string().min(1).max(500),
+});
+
 export const CreateQuestionSchema = z.object({
-  text: z.string().min(5),
-  options: z.array(
-    z.object({
-      id: z.enum(['A', 'B', 'C', 'D']),
-      text: z.string().min(1),
-    })
-  ).length(4),
+  text:          z.string().min(5).max(2000),
+  options:       z.array(QuestionOptionSchema).length(4), // exactly 4 options
   correctOption: z.enum(['A', 'B', 'C', 'D']),
-  explanation: z.string().max(1000).optional(),
-  order: z.number().int().min(0),
+  explanation:   z.string().max(2000).optional(),
+  order:         z.number().int().min(0),
 });
 
 export const SubmitAttemptSchema = z.object({
-  answers: z.record(z.string().cuid(), z.enum(['A', 'B', 'C', 'D'])),
-  timeTaken: z.number().int().min(0),
+  answers:   z.record(z.string().cuid(), z.enum(['A', 'B', 'C', 'D'])),
+  timeTaken: z.number().int().nonnegative().optional(), // optional for untimed tests
 });
 
 // ─── Notes ────────────────────────────────────────────────────────────────────
@@ -99,7 +106,7 @@ export const CreateFAQSchema = z.object({
 
 export const UpdateFAQSchema = CreateFAQSchema.partial();
 
-// ─── Inferred types ───────────────────────────────────────────────────────────
+// ─── Inferred types ───────────────────────────────────────────────────────────────────
 export type RegisterInput = z.infer<typeof RegisterSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type GoogleAuthInput = z.infer<typeof GoogleAuthSchema>;
