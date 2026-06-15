@@ -13,11 +13,17 @@ const TTL = {
   notes:              60 * 60 * 1000,      // 1 hour
   announcements:      30 * 60 * 1000,      // 30 min
   faqs:          7 * 24 * 60 * 60 * 1000, // 7 days
+  // 'tests' lobby list: short TTL because Ajit Sir can publish a new DAILY
+  // test any time during the day. Single-test queries ('test') are excluded
+  // from persistence entirely (see dehydrate guard below).
+  tests:              5 * 60 * 1000,       // 5 min
 } as const;
 
 // Only these public, non-sensitive query keys are persisted to localStorage.
-// Auth state, payment data, admin queries, and streaming data are never persisted.
-const PERSISTED_KEYS = new Set<string>(['subjects', 'notes', 'announcements', 'faqs']);
+// 'test' (single test with questions) is intentionally excluded — the payload
+// is ~15 KB and must always be fresh (question text may change).
+// Auth state, payment data, and admin queries are never persisted.
+const PERSISTED_KEYS = new Set<string>(['subjects', 'notes', 'announcements', 'faqs', 'tests']);
 
 function getQueryTTL(queryKey: readonly unknown[]): number {
   const key = queryKey[0] as string;
@@ -118,6 +124,12 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
           // Fix 6: Whitelist — only persist public, non-sensitive queries.
           shouldDehydrateQuery: (query) => {
             const key = query.queryKey[0] as string;
+
+            // 'test' = single test with all questions (~15 KB).
+            // Must NOT be persisted: too large for localStorage on low-end Android,
+            // and must always be fresh (answers must not come from stale cache).
+            if (key === 'test') return false;
+
             if (!PERSISTED_KEYS.has(key)) return false;
 
             // Don't persist queries that have no data yet (dataUpdatedAt = 0)

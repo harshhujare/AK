@@ -2,6 +2,11 @@ import { create } from 'zustand';
 import type { User } from '@ajitsir/shared';
 import apiClient, { isTransientAuthError } from './api-client';
 import { pdfCacheClearAll } from './pdf-cache';
+// IDB test history — cleared on logout to prevent cross-user data leakage
+// on shared/school devices. Import is lazy-safe: getDB() only runs in browser.
+import { clearResults } from '@/features/tests/lib/test-results-db';
+// Lean session store — cleared on logout so a stale session doesn't resume
+import { useTestSession } from '@/features/tests/store/test-session';
 
 // ─── Lazy queryClient import ─────────────────────────────────────────────────
 // We import lazily to avoid a circular dep: query-provider → auth-store → query-provider.
@@ -80,6 +85,13 @@ const useAuthStore = create<AuthState>((set, get) => ({
     }
     // Wipe cached PDFs — critical for shared/school computers
     await pdfCacheClearAll();
+
+    // Wipe IDB test results — prevents cross-user leakage on shared devices.
+    // clearResults() deliberately does NOT touch pending-attempts.
+    try { await clearResults(); } catch { /* IDB unavailable — ignore */ }
+
+    // Clear active test session (answers, current question index)
+    useTestSession.getState().clearSession();
 
     // Wipe React Query in-memory + persisted cache (Fix 5)
     // Prevents a logged-out user on a shared device from seeing another user's data

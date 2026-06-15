@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg-page:#0a0a0a;--bg-surface:#111111;--bg-surface-2:#1a1a1a;
+  --bg-hover:rgba(255,255,255,0.05);--bg-active:rgba(255,255,255,0.08);
+  --border:rgba(255,255,255,0.08);--border-strong:rgba(255,255,255,0.15);
+  --text-primary:#ffffff;--text-secondary:rgba(255,255,255,0.6);
+  --text-muted:rgba(255,255,255,0.35);
+  --accent-bg:#ffffff;--accent-text:#0a0a0a;
+  --success-bg:rgba(34,197,94,0.1);--success-text:#86efac;--success-border:rgba(34,197,94,0.3);
+  --danger-bg:rgba(239,68,68,0.15);--danger-text:#fca5a5;--danger-border:rgba(239,68,68,0.3);
+  --warn-bg:rgba(251,191,36,0.12);--warn-text:#fde68a;--warn-border:rgba(251,191,36,0.25);
+  --font-sans:'DM Sans',system-ui,sans-serif;
+}
+body{font-family:var(--font-sans);background:#1c1c1e;display:flex;flex-direction:column;align-items:center;padding:20px 12px 40px;gap:28px;color:var(--text-primary)}
+
+/* ── SECTION LABELS ── */
+.section-label{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);text-align:center;margin-bottom:4px}
+
+/* ── PHONE SHELL ── */
+.phone{width:340px;background:var(--bg-page);border-radius:36px;overflow:hidden;border:1px solid var(--border-strong);box-shadow:0 32px 80px rgba(0,0,0,0.7);display:flex;flex-direction:column}
+.status-bar{height:44px;background:var(--bg-page);display:flex;align-items:center;justify-content:space-between;padding:0 20px;flex-shrink:0}
+.status-time{font-size:13px;font-weight:600;color:var(--text-primary)}
+.status-icons{display:flex;gap:5px;align-items:center;font-size:11px;color:var(--text-secondary)}
+.screen{flex:1;overflow-y:auto;overflow-x:hidden;background:var(--bg-page);scrollbar-width:none}
+.screen::-webkit-scrollbar{display:none}
+
+/* ── BOTTOM NAV ── */
+.bnav{height:72px;background:rgba(10,10,10,0.92);backdrop-filter:blur(20px);border-top:1px solid var(--border);display:flex;align-items:stretch;flex-shrink:0;padding-bottom:8px}
+.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;color:var(--text-muted);transition:color .15s;border:none;background:none;font-family:var(--font-sans)}
+.bnav-item.active{color:var(--text-primary)}
+.bnav-icon{font-size:20px;line-height:1}
+.bnav-label{font-size:9px;font-weight:500;letter-spacing:.01em}
+
+/* ── LOBBY ── */
+.page-header{padding:20px 18px 12px;display:flex;align-items:flex-start;justify-content:space-between}
+.page-title{font-size:22px;font-weight:700;letter-spacing:-.02em}
+.page-sub{font-size:12px;color:var(--text-muted);margin-top:2px}
+.streak-chip{display:flex;align-items:center;gap:5px;background:var(--warn-bg);border:1px solid var(--warn-border);color:var(--warn-text);font-size:11px;font-weight:600;padding:5px 10px;border-radius:99px}
+
+.tabs{display:flex;padding:0 18px;gap:4px;margin-bottom:4px}
+.tab{flex:1;padding:8px 4px;font-size:11px;font-weight:600;letter-spacing:.03em;text-align:center;border-radius:8px;border:1px solid transparent;cursor:pointer;transition:all .15s;background:none;color:var(--text-muted);font-family:var(--font-sans)}
+.tab.active{background:var(--bg-surface-2);border-color:var(--border-strong);color:var(--text-primary)}
+
+/* Daily test hero card */
+.daily-hero{margin:10px 18px;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:20px;position:relative;overflow:hidden}
+.daily-hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at top right,rgba(99,102,241,0.3) 0%,transparent 60%);pointer-events:none}
+.daily-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(99,102,241,0.25);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;font-size:10px;font-weight:700;letter-spacing:.06em;padding:3px 9px;border-radius:99px;margin-bottom:12px}
+.daily-dot{width:5px;height:5px;border-radius:50%;background:#a5b4fc;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.daily-title{font-size:18px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px;line-height:1.2}
+.daily-meta{display:flex;gap:12px;margin-bottom:16px}
+.daily-meta-item{font-size:11px;color:rgba(255,255,255,0.55);display:flex;align-items:center;gap:4px}
+.daily-meta-icon{font-size:13px}
+.btn-start{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;background:white;color:#0a0a0a;font-size:13px;font-weight:700;border-radius:12px;border:none;cursor:pointer;font-family:var(--font-sans);transition:opacity .15s}
+.btn-start:active{opacity:.85}
+.btn-start-icon{font-size:15px}
+
+/* Attempted banner */
+.attempted-band{display:flex;align-items:center;gap:8px;background:var(--success-bg);border:1px solid var(--success-border);border-radius:10px;padding:8px 12px;margin-top:10px}
+.attempted-score{font-size:12px;color:var(--success-text);font-weight:600}
+
+/* Subject test list */
+.section-row{display:flex;align-items:center;justify-content:space-between;padding:14px 18px 8px}
+.section-row-title{font-size:13px;font-weight:600}
+.section-row-link{font-size:11px;color:var(--text-muted);cursor:pointer}
+
+.subject-chips{display:flex;gap:6px;overflow-x:auto;padding:0 18px 12px;scrollbar-width:none}
+.subject-chips::-webkit-scrollbar{display:none}
+.s-chip{flex-shrink:0;padding:6px 14px;border-radius:99px;border:1px solid var(--border);background:var(--bg-surface);font-size:11px;font-weight:500;cursor:pointer;color:var(--text-secondary);transition:all .15s;white-space:nowrap}
+.s-chip.active{background:var(--accent-bg);color:var(--accent-text);border-color:transparent}
+
+.test-card{margin:0 18px 10px;background:var(--bg-surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;cursor:pointer;transition:border-color .15s}
+.test-card:active{border-color:var(--border-strong)}
+.tc-top{display:flex;align-items:flex-start;justify-content:space-between;padding:14px 14px 10px}
+.tc-title{font-size:14px;font-weight:600;line-height:1.3;flex:1;padding-right:10px}
+.tc-badge{font-size:9px;font-weight:700;letter-spacing:.04em;padding:3px 8px;border-radius:6px;white-space:nowrap;flex-shrink:0}
+.tc-badge.free{background:var(--success-bg);color:var(--success-text);border:1px solid var(--success-border)}
+.tc-badge.paid{background:var(--bg-surface-2);color:var(--text-secondary);border:1px solid var(--border)}
+.tc-bottom{display:flex;align-items:center;gap:0;border-top:1px solid var(--border)}
+.tc-stat{flex:1;padding:8px 14px;display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text-muted);border-right:1px solid var(--border)}
+.tc-stat:last-child{border-right:none;justify-content:flex-end}
+.tc-stat-icon{font-size:13px}
+.tc-attempted{display:flex;align-items:center;gap:4px;padding:8px 14px;border-top:1px solid var(--success-border);background:var(--success-bg)}
+.tc-attempted-text{font-size:10px;color:var(--success-text);font-weight:500}
+
+/* ── RUNNER ── */
+.runner-header{padding:14px 18px;display:flex;align-items:center;gap:12px;background:var(--bg-surface);border-bottom:1px solid var(--border)}
+.runner-back{font-size:20px;cursor:pointer;color:var(--text-secondary);line-height:1;border:none;background:none;font-family:var(--font-sans)}
+.runner-title-group{flex:1;min-width:0}
+.runner-test-title{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.runner-subtitle{font-size:10px;color:var(--text-muted)}
+
+/* Timer */
+.timer-pill{display:flex;align-items:center;gap:5px;background:var(--bg-surface-2);border:1px solid var(--border);border-radius:99px;padding:5px 10px}
+.timer-icon{font-size:13px}
+.timer-val{font-size:13px;font-weight:700;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.timer-val.warn{color:var(--warn-text)}
+
+/* Progress bar */
+.progress-bar-wrap{padding:12px 18px 8px;background:var(--bg-surface)}
+.progress-info{display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:6px}
+.progress-track{height:3px;background:var(--bg-surface-2);border-radius:99px;overflow:hidden}
+.progress-fill{height:100%;background:var(--text-primary);border-radius:99px;transition:width .3s ease}
+
+/* Question dot grid */
+.q-dot-grid{display:flex;flex-wrap:wrap;gap:6px;padding:12px 18px;background:var(--bg-surface);border-bottom:1px solid var(--border)}
+.q-dot{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--bg-surface-2);color:var(--text-muted);transition:all .12s;flex-shrink:0}
+.q-dot.answered{background:var(--bg-active);border-color:var(--border-strong);color:var(--text-secondary)}
+.q-dot.current{background:var(--accent-bg);border-color:var(--accent-bg);color:var(--accent-text)}
+.q-dot.correct{background:var(--success-bg);border-color:var(--success-border);color:var(--success-text)}
+.q-dot.wrong{background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger-text)}
+
+/* Question card */
+.q-card{padding:18px 18px 12px}
+.q-num{font-size:10px;font-weight:600;color:var(--text-muted);letter-spacing:.05em;margin-bottom:8px}
+.q-text{font-size:15px;font-weight:500;line-height:1.5;color:var(--text-primary);margin-bottom:16px}
+.q-options{display:flex;flex-direction:column;gap:8px}
+.q-opt{display:flex;align-items:flex-start;gap:10px;padding:11px 14px;background:var(--bg-surface);border:1px solid var(--border);border-radius:12px;cursor:pointer;transition:all .15s;text-align:left;font-family:var(--font-sans)}
+.q-opt:active{background:var(--bg-hover)}
+.q-opt.selected{background:var(--bg-active);border-color:var(--border-strong)}
+.q-opt.selected .opt-label{background:var(--accent-bg);color:var(--accent-text);border-color:var(--accent-bg)}
+.q-opt.correct-ans{background:var(--success-bg);border-color:var(--success-border)}
+.q-opt.correct-ans .opt-label{background:var(--success-text);color:#0a0a0a;border-color:var(--success-text)}
+.q-opt.wrong-ans{background:var(--danger-bg);border-color:var(--danger-border)}
+.q-opt.wrong-ans .opt-label{background:var(--danger-text);color:#0a0a0a;border-color:var(--danger-text)}
+.opt-label{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;border:1px solid var(--border);color:var(--text-secondary);flex-shrink:0;transition:all .15s}
+.opt-text{font-size:13px;color:var(--text-primary);line-height:1.4;flex:1;padding-top:1px}
+
+/* Explanation */
+.explanation{margin:0 18px 12px;background:var(--info-bg,rgba(255,255,255,.04));border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+.explanation-label{font-size:9px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);text-transform:uppercase;margin-bottom:5px}
+.explanation-text{font-size:12px;color:var(--text-secondary);line-height:1.5}
+
+/* Runner nav */
+.runner-nav{display:flex;gap:8px;padding:12px 18px 16px;background:var(--bg-surface);border-top:1px solid var(--border)}
+.btn-nav{flex:1;padding:11px;border-radius:12px;font-size:13px;font-weight:600;border:1px solid var(--border);background:var(--bg-surface-2);color:var(--text-secondary);cursor:pointer;font-family:var(--font-sans);transition:all .15s}
+.btn-nav:disabled{opacity:.35;cursor:default}
+.btn-next{background:var(--accent-bg);color:var(--accent-text);border-color:var(--accent-bg)}
+.btn-submit{background:var(--success-text);color:#0a0a0a;border-color:var(--success-text)}
+
+/* ── RESULT PAGE ── */
+.result-hero{padding:24px 18px 20px;text-align:center;background:linear-gradient(180deg,rgba(34,197,94,.06) 0%,transparent 100%)}
+.result-ring-wrap{display:flex;justify-content:center;margin-bottom:16px}
+.result-ring{position:relative;width:100px;height:100px}
+.result-ring svg{transform:rotate(-90deg)}
+.ring-track{fill:none;stroke:var(--bg-surface-2);stroke-width:8}
+.ring-fill{fill:none;stroke:#86efac;stroke-width:8;stroke-linecap:round;transition:stroke-dashoffset .6s ease}
+.ring-label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring-pct{font-size:20px;font-weight:800;letter-spacing:-.03em}
+.ring-sub{font-size:9px;color:var(--text-muted);font-weight:500}
+.result-grade{font-size:16px;font-weight:700;margin-bottom:4px}
+.result-msg{font-size:12px;color:var(--text-secondary)}
+
+.result-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 18px 18px}
+.rs-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
+.rs-val{font-size:20px;font-weight:800;letter-spacing:-.02em;margin-bottom:2px}
+.rs-val.green{color:var(--success-text)}
+.rs-val.red{color:var(--danger-text)}
+.rs-val.muted{color:var(--text-muted)}
+.rs-val.blue{color:#93c5fd}
+.rs-label{font-size:10px;color:var(--text-muted);font-weight:500}
+
+.breakdown-header{padding:0 18px 10px;font-size:12px;font-weight:600;color:var(--text-secondary);border-bottom:1px solid var(--border);margin-bottom:0}
+
+.bi{margin:0 18px;border-bottom:1px solid var(--border);padding:12px 0}
+.bi:last-child{border-bottom:none}
+.bi-top{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px}
+.bi-num{width:22px;height:22px;border-radius:6px;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.bi-num.correct{background:var(--success-bg);color:var(--success-text);border:1px solid var(--success-border)}
+.bi-num.wrong{background:var(--danger-bg);color:var(--danger-text);border:1px solid var(--danger-border)}
+.bi-num.skip{background:var(--bg-surface-2);color:var(--text-muted);border:1px solid var(--border)}
+.bi-q{font-size:12px;color:var(--text-primary);line-height:1.4;flex:1}
+.bi-answer-row{display:flex;gap:6px;flex-wrap:wrap;padding-left:32px}
+.bi-ans-chip{font-size:10px;padding:3px 8px;border-radius:6px;font-weight:500}
+.bi-ans-chip.yours{background:var(--danger-bg);color:var(--danger-text);border:1px solid var(--danger-border)}
+.bi-ans-chip.correct{background:var(--success-bg);color:var(--success-text);border:1px solid var(--success-border)}
+.bi-expl{margin-top:6px;padding:8px 10px;background:var(--bg-surface);border-radius:8px;font-size:11px;color:var(--text-secondary);line-height:1.5;margin-left:32px}
+
+.result-actions{display:flex;gap:8px;padding:18px 18px 20px}
+.btn-retake{flex:1;padding:12px;border-radius:12px;font-size:13px;font-weight:600;border:1px solid var(--border);background:var(--bg-surface-2);color:var(--text-secondary);cursor:pointer;font-family:var(--font-sans)}
+.btn-home{flex:1;padding:12px;border-radius:12px;font-size:13px;font-weight:700;border:none;background:var(--accent-bg);color:var(--accent-text);cursor:pointer;font-family:var(--font-sans)}
+
+/* ── ADMIN TEST BUILDER ── */
+.admin-wrap{background:#0d0d0d;border-radius:20px;border:1px solid var(--border-strong);overflow:hidden;width:640px;max-width:100%}
+.admin-topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);background:var(--bg-surface)}
+.admin-topbar-title{font-size:15px;font-weight:700}
+.btn-publish{padding:7px 16px;border-radius:8px;font-size:12px;font-weight:700;background:var(--accent-bg);color:var(--accent-text);border:none;cursor:pointer;font-family:var(--font-sans)}
+.admin-body{display:flex;height:480px}
+.admin-sidebar{width:200px;flex-shrink:0;border-right:1px solid var(--border);background:var(--bg-surface);padding:12px;display:flex;flex-direction:column;gap:6px}
+.admin-sidebar-label{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);padding:6px 8px 4px}
+.q-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;border:1px solid transparent;transition:all .12s}
+.q-item:hover{background:var(--bg-hover)}
+.q-item.active{background:var(--bg-active);border-color:var(--border)}
+.q-item-num{width:20px;height:20px;border-radius:5px;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--bg-surface-2);color:var(--text-muted);border:1px solid var(--border)}
+.q-item-num.done{background:var(--success-bg);color:var(--success-text);border-color:var(--success-border)}
+.q-item-text{font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.add-q-btn{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:8px;border:1px dashed var(--border);color:var(--text-muted);font-size:11px;cursor:pointer;margin-top:4px;background:none;font-family:var(--font-sans);transition:all .15s;width:100%}
+.add-q-btn:hover{border-color:var(--border-strong);color:var(--text-secondary)}
+.admin-main{flex:1;overflow-y:auto;padding:20px}
+.admin-field-group{margin-bottom:18px}
+.admin-label{font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px}
+.admin-input{width:100%;background:var(--input-bg,rgba(255,255,255,.04));border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--text-primary);font-family:var(--font-sans);outline:none;transition:border-color .15s}
+.admin-input:focus{border-color:var(--border-strong)}
+.admin-input::placeholder{color:var(--text-muted)}
+.admin-row{display:flex;gap:10px}
+.admin-row .admin-field-group{flex:1}
+.correct-opt-row{display:flex;gap:6px;flex-wrap:wrap}
+.correct-opt-btn{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--bg-surface-2);color:var(--text-secondary);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font-sans);transition:all .15s}
+.correct-opt-btn.selected{background:var(--accent-bg);color:var(--accent-text);border-color:var(--accent-bg)}
+.type-select-row{display:flex;gap:6px}
+.type-btn{flex:1;padding:8px 4px;border-radius:8px;border:1px solid var(--border);background:var(--bg-surface-2);color:var(--text-secondary);font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font-sans);transition:all .15s;text-align:center}
+.type-btn.active{background:var(--bg-active);border-color:var(--border-strong);color:var(--text-primary)}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg-surface);border:1px solid var(--border);border-radius:10px}
+.toggle-label{font-size:12px;color:var(--text-secondary)}
+.toggle{width:36px;height:20px;border-radius:99px;background:var(--success-text);position:relative;cursor:pointer;transition:background .15s}
+.toggle::after{content:'';width:14px;height:14px;border-radius:50%;background:white;position:absolute;top:3px;right:3px;transition:right .15s}
+.toggle.off{background:var(--bg-surface-2);border:1px solid var(--border)}
+.toggle.off::after{right:auto;left:3px}
+
+/* ── TOOLTIPS / ANNOTATIONS ── */
+.annot-row{display:flex;align-items:flex-start;gap:8px;padding:0 4px}
+.annot-num{width:18px;height:18px;border-radius:50%;background:var(--bg-surface-2);border:1px solid var(--border-strong);color:var(--text-secondary);font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.annot-text{font-size:11px;color:var(--text-muted);line-height:1.5}
+.annot-text strong{color:var(--text-secondary);font-weight:600}
+
+/* ── LAYOUT ── */
+.row{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;justify-content:center;width:100%;max-width:1200px}
+.col{display:flex;flex-direction:column;align-items:center;gap:8px}
+
+textarea.admin-input{resize:vertical;min-height:70px}
+select.admin-input{appearance:none;-webkit-appearance:none}
+
+/* pseudo-tabs for admin */
+.admin-seg{display:flex;background:var(--bg-surface-2);border-radius:8px;padding:2px;gap:2px;margin-bottom:16px}
+.seg-btn{flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;color:var(--text-muted);cursor:pointer;border:none;background:none;font-family:var(--font-sans);transition:all .15s}
+.seg-btn.active{background:var(--bg-active);color:var(--text-primary)}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     ROW 1: LOBBY + RUNNER
+═══════════════════════════════════════════════════════ -->
+<div class="row">
+
+  <!-- LOBBY -->
+  <div class="col">
+    <div class="section-label">Test Lobby</div>
+    <div class="phone">
+      <div class="status-bar">
+        <span class="status-time">9:41</span>
+        <div class="status-icons"><span>●●●</span><span>WiFi</span><span>100%</span></div>
+      </div>
+      <div class="screen">
+        <!-- Header -->
+        <div class="page-header">
+          <div>
+            <div class="page-title">Mock Tests</div>
+            <div class="page-sub">Maharashtra TET Preparation</div>
+          </div>
+          <div class="streak-chip">🔥 <span>7</span></div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+          <button class="tab active">Daily</button>
+          <button class="tab">Scheduled</button>
+          <button class="tab">By Subject</button>
+        </div>
+
+        <!-- Daily Hero Card -->
+        <div class="daily-hero">
+          <div class="daily-badge"><span class="daily-dot"></span> TODAY · JUNE 12</div>
+          <div class="daily-title">बालमानसशास्त्र<br>Daily Practice Test</div>
+          <div class="daily-meta">
+            <div class="daily-meta-item"><span class="daily-meta-icon">📋</span>25 Questions</div>
+            <div class="daily-meta-item"><span class="daily-meta-icon">⏱</span>30 Min</div>
+            <div class="daily-meta-item"><span class="daily-meta-icon">⭐</span>Free</div>
+          </div>
+          <button class="btn-start"><span class="btn-start-icon">▶</span> Start Today's Test</button>
+          <div class="attempted-band" style="display:none">
+            <span style="font-size:16px">✅</span>
+            <span class="attempted-score">Completed · Score: 19/25 (76%)</span>
+          </div>
+        </div>
+
+        <!-- Subject filter -->
+        <div class="section-row">
+          <span class="section-row-title">Subject Tests</span>
+          <span class="section-row-link">See all</span>
+        </div>
+        <div class="subject-chips">
+          <div class="s-chip active">All</div>
+          <div class="s-chip">Marathi</div>
+          <div class="s-chip">Child Dev.</div>
+          <div class="s-chip">English</div>
+          <div class="s-chip">Maths</div>
+          <div class="s-chip">Science</div>
+        </div>
+
+        <!-- Test cards -->
+        <div class="test-card">
+          <div class="tc-top">
+            <div class="tc-title">Child Development & Pedagogy — Paper I</div>
+            <div class="tc-badge free">FREE</div>
+          </div>
+          <div class="tc-bottom">
+            <div class="tc-stat"><span class="tc-stat-icon">📋</span>30 Qs</div>
+            <div class="tc-stat"><span class="tc-stat-icon">⏱</span>45 min</div>
+            <div class="tc-stat"><span class="tc-stat-icon">👥</span>1.2k attempts</div>
+          </div>
+          <div class="tc-attempted">
+            <span style="font-size:12px">✅</span>
+            <span class="tc-attempted-text">Your best: 24/30 · 80%</span>
+          </div>
+        </div>
+
+        <div class="test-card">
+          <div class="tc-top">
+            <div class="tc-title">Marathi Language — Paper I & II Combined</div>
+            <div class="tc-badge paid">PREMIUM</div>
+          </div>
+          <div class="tc-bottom">
+            <div class="tc-stat"><span class="tc-stat-icon">📋</span>50 Qs</div>
+            <div class="tc-stat"><span class="tc-stat-icon">⏱</span>60 min</div>
+            <div class="tc-stat"><span class="tc-stat-icon">👥</span>856</div>
+          </div>
+        </div>
+
+        <div class="test-card" style="margin-bottom:18px">
+          <div class="tc-top">
+            <div class="tc-title">Environmental Studies — Full Syllabus</div>
+            <div class="tc-badge free">FREE</div>
+          </div>
+          <div class="tc-bottom">
+            <div class="tc-stat"><span class="tc-stat-icon">📋</span>40 Qs</div>
+            <div class="tc-stat"><span class="tc-stat-icon">⏱</span>45 min</div>
+            <div class="tc-stat"><span class="tc-stat-icon">👥</span>2.1k</div>
+          </div>
+        </div>
+
+      </div>
+      <div class="bnav">
+        <button class="bnav-item"><span class="bnav-icon">🏠</span><span class="bnav-label">Home</span></button>
+        <button class="bnav-item"><span class="bnav-icon">📚</span><span class="bnav-label">Notes</span></button>
+        <button class="bnav-item active"><span class="bnav-icon">📋</span><span class="bnav-label">Tests</span></button>
+        <button class="bnav-item"><span class="bnav-icon">⭐</span><span class="bnav-label">Plans</span></button>
+        <button class="bnav-item"><span class="bnav-icon">👤</span><span class="bnav-label">Account</span></button>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:5px;width:340px">
+      <div class="annot-row"><div class="annot-num">1</div><div class="annot-text"><strong>Daily Test hero card</strong> — full bleed gradient. One tap to start. Never requires scrolling to find.</div></div>
+      <div class="annot-row"><div class="annot-num">2</div><div class="annot-text"><strong>Streak counter</strong> — motivates daily habit, same pattern as Duolingo.</div></div>
+      <div class="annot-row"><div class="annot-num">3</div><div class="annot-text"><strong>Attempted badge</strong> on cards — student sees best score without tapping in.</div></div>
+    </div>
+  </div>
+
+  <!-- RUNNER -->
+  <div class="col">
+    <div class="section-label">Test Runner (Q3 of 25)</div>
+    <div class="phone">
+      <div class="status-bar">
+        <span class="status-time">9:53</span>
+        <div class="status-icons"><span>●●●</span><span>WiFi</span><span>82%</span></div>
+      </div>
+      <div class="screen">
+        <!-- Runner header -->
+        <div class="runner-header">
+          <button class="runner-back">←</button>
+          <div class="runner-title-group">
+            <div class="runner-test-title">बालमानसशास्त्र Daily Test</div>
+            <div class="runner-subtitle">Question 3 of 25</div>
+          </div>
+          <div class="timer-pill">
+            <span class="timer-icon">⏱</span>
+            <span class="timer-val warn">23:14</span>
+          </div>
+        </div>
+
+        <!-- Progress bar -->
+        <div class="progress-bar-wrap" style="padding-bottom:12px">
+          <div class="progress-info"><span>2 answered</span><span>23 remaining</span></div>
+          <div class="progress-track"><div class="progress-fill" style="width:8%"></div></div>
+        </div>
+
+        <!-- Q dot grid -->
+        <div class="q-dot-grid">
+          <div class="q-dot answered">1</div>
+          <div class="q-dot answered">2</div>
+          <div class="q-dot current">3</div>
+          <div class="q-dot">4</div>
+          <div class="q-dot">5</div>
+          <div class="q-dot">6</div>
+          <div class="q-dot">7</div>
+          <div class="q-dot">8</div>
+          <div class="q-dot">9</div>
+          <div class="q-dot">10</div>
+          <div class="q-dot">11</div>
+          <div class="q-dot">12</div>
+        </div>
+
+        <!-- Question -->
+        <div class="q-card">
+          <div class="q-num">QUESTION 3</div>
+          <div class="q-text">According to Piaget's theory, in which stage does a child develop the concept of object permanence?</div>
+          <div class="q-options">
+            <button class="q-opt">
+              <span class="opt-label">A</span>
+              <span class="opt-text">Preoperational Stage</span>
+            </button>
+            <button class="q-opt selected">
+              <span class="opt-label">B</span>
+              <span class="opt-text">Sensorimotor Stage</span>
+            </button>
+            <button class="q-opt">
+              <span class="opt-label">C</span>
+              <span class="opt-text">Concrete Operational Stage</span>
+            </button>
+            <button class="q-opt">
+              <span class="opt-label">D</span>
+              <span class="opt-text">Formal Operational Stage</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+      <!-- Runner nav -->
+      <div class="runner-nav">
+        <button class="btn-nav">← Prev</button>
+        <button class="btn-nav btn-next">Next →</button>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:5px;width:340px">
+      <div class="annot-row"><div class="annot-num">4</div><div class="annot-text"><strong>Question dot grid</strong> — tap any dot to jump to that question. Filled = answered, white = current, empty = unattempted.</div></div>
+      <div class="annot-row"><div class="annot-num">5</div><div class="annot-text"><strong>Countdown in header</strong> — turns amber under 5 minutes, red under 2.</div></div>
+      <div class="annot-row"><div class="annot-num">6</div><div class="annot-text"><strong>Selected option</strong> fills the label badge, full row highlights. No confirm button — tap = select, next swipe commits.</div></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     ROW 2: RESULT + ADMIN BUILDER
+═══════════════════════════════════════════════════════ -->
+<div class="row">
+
+  <!-- RESULT PAGE -->
+  <div class="col">
+    <div class="section-label">Result + Breakdown</div>
+    <div class="phone">
+      <div class="status-bar">
+        <span class="status-time">10:29</span>
+        <div class="status-icons"><span>●●●</span><span>WiFi</span><span>79%</span></div>
+      </div>
+      <div class="screen">
+        <div class="result-hero">
+          <div class="result-ring-wrap">
+            <div class="result-ring">
+              <svg viewBox="0 0 100 100" width="100" height="100">
+                <circle class="ring-track" cx="50" cy="50" r="40"/>
+                <circle class="ring-fill" cx="50" cy="50" r="40"
+                  stroke-dasharray="251.2"
+                  stroke-dashoffset="62.8"/>
+              </svg>
+              <div class="ring-label">
+                <span class="ring-pct">75%</span>
+                <span class="ring-sub">19 / 25</span>
+              </div>
+            </div>
+          </div>
+          <div class="result-grade">Great Work! 🎉</div>
+          <div class="result-msg">Better than 68% of students today</div>
+        </div>
+
+        <div class="result-stats">
+          <div class="rs-card">
+            <div class="rs-val green">19</div>
+            <div class="rs-label">Correct</div>
+          </div>
+          <div class="rs-card">
+            <div class="rs-val red">4</div>
+            <div class="rs-label">Wrong</div>
+          </div>
+          <div class="rs-card">
+            <div class="rs-val muted">2</div>
+            <div class="rs-label">Skipped</div>
+          </div>
+          <div class="rs-card">
+            <div class="rs-val blue">24m 12s</div>
+            <div class="rs-label">Time Taken</div>
+          </div>
+        </div>
+
+        <div class="breakdown-header">Answer Breakdown</div>
+
+        <!-- Q1 correct -->
+        <div class="bi">
+          <div class="bi-top">
+            <div class="bi-num correct">Q1</div>
+            <div class="bi-q">Which stage in Piaget's theory involves conservation tasks?</div>
+          </div>
+          <div class="bi-answer-row">
+            <span class="bi-ans-chip correct">✓ B — Concrete Operational</span>
+          </div>
+        </div>
+
+        <!-- Q2 wrong with explanation -->
+        <div class="bi">
+          <div class="bi-top">
+            <div class="bi-num wrong">Q3</div>
+            <div class="bi-q">According to Piaget, object permanence develops in which stage?</div>
+          </div>
+          <div class="bi-answer-row">
+            <span class="bi-ans-chip yours">✗ A — Preoperational</span>
+            <span class="bi-ans-chip correct">✓ B — Sensorimotor</span>
+          </div>
+          <div class="bi-expl">Object permanence — understanding that objects continue to exist when not seen — is a key milestone of the Sensorimotor stage (0–2 years).</div>
+        </div>
+
+        <!-- Q3 skipped -->
+        <div class="bi" style="margin-bottom:8px">
+          <div class="bi-top">
+            <div class="bi-num skip">Q7</div>
+            <div class="bi-q">Vygotsky's Zone of Proximal Development refers to...</div>
+          </div>
+          <div class="bi-answer-row">
+            <span class="bi-ans-chip" style="background:var(--bg-surface-2);color:var(--text-muted);border:1px solid var(--border)">— Skipped</span>
+            <span class="bi-ans-chip correct">✓ C — Gap between actual and potential</span>
+          </div>
+        </div>
+
+        <div class="result-actions">
+          <button class="btn-retake">Retake Test</button>
+          <button class="btn-home">Back to Tests</button>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:5px;width:340px">
+      <div class="annot-row"><div class="annot-num">7</div><div class="annot-text"><strong>Score ring</strong> — animated SVG circle on mount. Grade label adapts: &lt;40% = "Keep Practicing", 40–70% = "Good Effort", &gt;70% = "Great Work".</div></div>
+      <div class="annot-row"><div class="annot-num">8</div><div class="annot-text"><strong>Breakdown</strong> reads from IndexedDB — works offline, instant. Explanation text only shows on wrong/skipped answers.</div></div>
+      <div class="annot-row"><div class="annot-num">9</div><div class="annot-text"><strong>Percentile</strong> ("better than 68%") — single aggregate query on server, shown only if ≥10 attempts exist.</div></div>
+    </div>
+  </div>
+
+  <!-- ADMIN QUESTION BUILDER -->
+  <div class="col">
+    <div class="section-label">Admin — Question Builder</div>
+    <div class="admin-wrap">
+      <div class="admin-topbar">
+        <div>
+          <div class="admin-topbar-title">बालमानसशास्त्र Daily Test</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">8 questions · Draft</div>
+        </div>
+        <button class="btn-publish">Publish</button>
+      </div>
+      <div class="admin-body">
+        <!-- Sidebar: question list -->
+        <div class="admin-sidebar">
+          <div class="admin-sidebar-label">Questions</div>
+          <div class="q-item done">
+            <div class="q-item-num done">1</div>
+            <div class="q-item-text">Which stage involves...</div>
+          </div>
+          <div class="q-item done">
+            <div class="q-item-num done">2</div>
+            <div class="q-item-text">Vygotsky's ZPD...</div>
+          </div>
+          <div class="q-item active">
+            <div class="q-item-num" style="background:var(--accent-bg);color:var(--accent-text);border-color:var(--accent-bg)">3</div>
+            <div class="q-item-text" style="color:var(--text-primary)">According to Piaget...</div>
+          </div>
+          <div class="q-item">
+            <div class="q-item-num">4</div>
+            <div class="q-item-text">Jean Piaget was...</div>
+          </div>
+          <div class="q-item">
+            <div class="q-item-num">5</div>
+            <div class="q-item-text">Howard Gardner...</div>
+          </div>
+          <button class="add-q-btn">＋ Add Question</button>
+          <div style="margin-top:auto;padding-top:8px;border-top:1px solid var(--border)">
+            <div class="admin-sidebar-label">Test Settings</div>
+            <div style="font-size:10px;color:var(--text-muted);padding:4px 8px;display:flex;flex-direction:column;gap:4px">
+              <span>Type: <strong style="color:var(--text-secondary)">DAILY</strong></span>
+              <span>Time: <strong style="color:var(--text-secondary)">30 min</strong></span>
+              <span>Access: <strong style="color:var(--success-text)">FREE</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main: question editor -->
+        <div class="admin-main">
+          <div class="admin-seg">
+            <button class="seg-btn active">Question</button>
+            <button class="seg-btn">Options</button>
+            <button class="seg-btn">Settings</button>
+          </div>
+
+          <div class="admin-field-group">
+            <div class="admin-label">Question Text</div>
+            <textarea class="admin-input" rows="3" placeholder="Type question here...">According to Piaget's theory, in which stage does a child develop the concept of object permanence?</textarea>
+          </div>
+
+          <div class="admin-label" style="margin-bottom:8px">Options</div>
+          <div class="admin-field-group" style="margin-bottom:8px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <div style="width:22px;height:22px;border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text-muted);flex-shrink:0">A</div>
+              <input class="admin-input" value="Preoperational Stage" style="margin:0">
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <div style="width:22px;height:22px;border-radius:6px;background:var(--accent-bg);border:1px solid var(--accent-bg);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--accent-text);flex-shrink:0">B</div>
+              <input class="admin-input" value="Sensorimotor Stage" style="margin:0;border-color:var(--success-border)">
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <div style="width:22px;height:22px;border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text-muted);flex-shrink:0">C</div>
+              <input class="admin-input" value="Concrete Operational Stage" style="margin:0">
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="width:22px;height:22px;border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text-muted);flex-shrink:0">D</div>
+              <input class="admin-input" value="Formal Operational Stage" style="margin:0">
+            </div>
+          </div>
+
+          <div class="admin-field-group">
+            <div class="admin-label">Correct Answer</div>
+            <div class="correct-opt-row">
+              <button class="correct-opt-btn">A</button>
+              <button class="correct-opt-btn selected">B</button>
+              <button class="correct-opt-btn">C</button>
+              <button class="correct-opt-btn">D</button>
+            </div>
+          </div>
+
+          <div class="admin-field-group">
+            <div class="admin-label">Explanation (optional)</div>
+            <textarea class="admin-input" rows="2" placeholder="Explain the correct answer...">Object permanence develops in the Sensorimotor stage (0–2 years) — the child understands objects exist even when not visible.</textarea>
+          </div>
+
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <button style="flex:1;padding:9px;border-radius:10px;border:1px solid var(--border);background:var(--bg-surface-2);color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font-sans)">← Prev</button>
+            <button style="flex:1;padding:9px;border-radius:10px;border:none;background:var(--accent-bg);color:var(--accent-text);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font-sans)">Save & Next →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:5px;width:640px;max-width:100%">
+      <div class="annot-row"><div class="annot-num">10</div><div class="annot-text"><strong>Two-panel layout</strong> — question list on left, editor on right. No page reloads between questions, all state in React.</div></div>
+      <div class="annot-row"><div class="annot-num">11</div><div class="annot-text"><strong>Correct answer highlight</strong> — selected option B gets accent styling in both the list and the editor simultaneously.</div></div>
+      <div class="annot-row"><div class="annot-num">12</div><div class="annot-text"><strong>Publish toggle</strong> in top-right — single PATCH call, no full form re-submit. Draft → Live in one tap.</div></div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
