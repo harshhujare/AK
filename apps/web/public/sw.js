@@ -17,7 +17,8 @@ const NETWORK_ONLY_PATTERNS = [
 ];
 
 // ─── App shell pages to pre-cache on install ─────────────────────────────────
-const SHELL_PAGES = ['/', '/notes', '/plans', '/account', '/help', '/offline.html'];
+const SHELL_PAGES = ['/', '/notes', '/tests', '/account', '/help', '/offline.html'];
+
 
 // ─── Install: cache offline fallback immediately ───────────────────────────────
 self.addEventListener('install', (event) => {

@@ -62,9 +62,10 @@ export default function Navbar() {
           {/* Desktop nav links */}
           <div className="navbar-links" role="list">
             <Link href="/pricing" className="navbar-link" role="listitem" style={{ color: 'var(--accent)', fontWeight: 600 }}>Pricing</Link>
-            <Link href="/#notes" className="navbar-link" role="listitem">Notes</Link>
-            <Link href="/#about" className="navbar-link" role="listitem">About</Link>
-            <Link href="/help" className="navbar-link" role="listitem">Help</Link>
+            <Link href="/tests"   className={`navbar-link ${pathname.startsWith('/tests') ? 'navbar-link--active' : ''}`} role="listitem">Mock Tests</Link>
+            <Link href="/#notes"  className="navbar-link" role="listitem">Notes</Link>
+            <Link href="/#about"  className="navbar-link" role="listitem">About</Link>
+            <Link href="/help"    className="navbar-link" role="listitem">Help</Link>
           </div>
 
           {/* Desktop auth actions */}
@@ -221,6 +222,10 @@ export default function Navbar() {
         .navbar-link:hover {
           color: var(--text-primary);
           background: var(--bg-hover);
+        }
+        .navbar-link--active {
+          color: var(--text-primary);
+          background: var(--bg-active);
         }
 
         .navbar-auth {

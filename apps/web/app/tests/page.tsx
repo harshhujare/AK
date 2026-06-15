@@ -271,12 +271,23 @@ const lobbyStyles = `
     padding: 40px 18px;
   }
 
-  /* Desktop: wider panel */
+  /* Desktop: wider panel + two-column grid */
   @media (min-width: 768px) {
+    .lobby-page { max-width: 1040px; }
     .lobby-header { padding: 28px 24px 16px; }
     .lobby-tabs   { padding: 0 24px; }
     .lobby-section-pad { padding: 8px 24px; }
     .lobby-section-row { padding: 12px 24px 8px; }
-    .test-list         { padding: 0 24px 10px; }
+    .test-list {
+      padding: 0 24px 10px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    /* Skeleton in grid mode */
+    .test-card-skeleton { height: 96px; }
+  }
+  @media (min-width: 1024px) {
+    .lobby-page { max-width: 1200px; }
   }
 `;
