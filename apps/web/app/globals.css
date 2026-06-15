@@ -113,11 +113,26 @@ html {
 }
 
 body {
-  font-family: var(--font-sans), 'DM Sans', sans-serif;
+  /* DM Sans handles Latin; Noto Sans Devanagari handles Marathi/Devanagari script.
+     The browser automatically uses the correct font per character — no component
+     changes needed. Glyphs not in DM Sans fall through to Noto Devanagari. */
+  font-family: var(--font-sans), var(--font-devanagari), 'DM Sans', 'Noto Sans Devanagari', system-ui, sans-serif;
   background: var(--bg-page);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
+  /* optimizeLegibility improves Devanagari matra rendering on low-DPI Android screens */
+  text-rendering: optimizeLegibility;
   transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Devanagari text needs slightly more vertical space for matras (vowel diacritics)
+   that extend above and below the base line. Applied to question and option text
+   in the test runner via the .marathi-text utility class. */
+.marathi-text {
+  font-family: var(--font-devanagari), 'Noto Sans Devanagari', sans-serif;
+  line-height: 1.7;
+  /* Prevent clipping of top matras on tight containers */
+  overflow: visible;
 }
 
 /* ── Typography util ──────────────────────────────────────────────────────── */

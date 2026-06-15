@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Playfair_Display, DM_Sans } from "next/font/google";
+import { Playfair_Display, DM_Sans, Noto_Sans_Devanagari } from "next/font/google";
 import "./globals.css";
 import QueryProvider from "@/lib/query-provider";
 import Navbar from "@/components/layout/Navbar";
@@ -21,6 +21,17 @@ const dmSans = DM_Sans({
   weight: ["300", "400", "500"],
 });
 
+// Devanagari script support for Marathi test questions and options.
+// Only the 'devanagari' subset is loaded — no Latin glyphs duplicated.
+// Weight 400 + 500 covers body text and semi-bold labels.
+const notoDevanagari = Noto_Sans_Devanagari({
+  variable: "--font-devanagari",
+  subsets: ["devanagari"],
+  weight: ["400", "500", "600", "700"],
+  // display: swap avoids invisible text while the font loads (FOIT)
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "AjitSir Academy — Maharashtra TET Exam Preparation",
   description:
@@ -39,7 +50,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${playfair.variable} ${dmSans.variable}`} data-theme="light" suppressHydrationWarning>
+    <html lang="mr" className={`${playfair.variable} ${dmSans.variable} ${notoDevanagari.variable}`} data-theme="light" suppressHydrationWarning>
       <head>
         <link rel="offline" href="/offline.html" />
         <link rel="manifest" href="/manifest.json" />
