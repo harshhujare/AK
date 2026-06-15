@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutDashboard, Megaphone, BookOpen, FileText, Users, LifeBuoy, HelpCircle, CreditCard } from 'lucide-react';
+import { LayoutDashboard, Megaphone, BookOpen, FileText, Users, LifeBuoy, HelpCircle, CreditCard, ClipboardList } from 'lucide-react';
 import useAuthStore from '@/lib/auth-store';
 
 const NAV_ITEMS = [
@@ -12,8 +12,9 @@ const NAV_ITEMS = [
   { href: '/admin/support/faqs', label: 'Manage FAQs', icon: <HelpCircle size={18} />, exact: false, roles: ['SUPER_ADMIN', 'CONTENT_MANAGER', 'SUPPORT_MANAGER'] },
   { href: '/admin/announcements', label: 'Announcements', icon: <Megaphone size={18} />, exact: false, roles: ['SUPER_ADMIN', 'CONTENT_MANAGER'] },
   { href: '/admin/subjects', label: 'Subjects', icon: <BookOpen size={18} />, exact: false, roles: ['SUPER_ADMIN', 'CONTENT_MANAGER'] },
-  { href: '/admin/notes', label: 'Notes', icon: <FileText size={18} />, exact: false, roles: ['SUPER_ADMIN', 'CONTENT_MANAGER'] },
-  { href: '/admin/payments', label: 'Payments', icon: <CreditCard size={18} />, exact: false, roles: ['SUPER_ADMIN', 'CONTENT_MANAGER'] },
+  { href: '/admin/notes',          label: 'Notes',        icon: <FileText     size={18} />, exact: false, roles: ['SUPER_ADMIN', 'CONTENT_MANAGER'] },
+  { href: '/admin/tests',          label: 'Mock Tests',   icon: <ClipboardList size={18} />, exact: false, roles: ['SUPER_ADMIN', 'CONTENT_MANAGER'] },
+  { href: '/admin/payments',       label: 'Payments',     icon: <CreditCard   size={18} />, exact: false, roles: ['SUPER_ADMIN', 'CONTENT_MANAGER'] },
   { href: '/admin/users', label: 'Users', icon: <Users size={18} />, exact: false, roles: ['SUPER_ADMIN'] },
 ];
 
