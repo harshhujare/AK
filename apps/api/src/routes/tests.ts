@@ -229,7 +229,41 @@ testsRouter.post('/:id/attempt', requireAuth(), async (req: Request, res: Respon
   }
 
   // ─── Server-side scoring (never trust client) ─────────────────────────────
-  const { answers, timeTaken } = parsed.data;
+  const { answers, timeTaken, clientAttemptId } = parsed.data;
+
+  // ── Idempotency: return existing attempt if clientAttemptId was already used ──
+  // This fires when the network drops AFTER the server wrote the row but BEFORE
+  // the response reached the client. The client retries with the same UUID; we
+  // return the existing result without creating a duplicate attempt.
+  if (clientAttemptId) {
+    const existing = await prisma.testAttempt.findUnique({
+      where: { userId_clientAttemptId: { userId: req.user!.userId, clientAttemptId } },
+      include: { test: { include: { questions: { orderBy: { order: 'asc' } } } } },
+    });
+    if (existing) {
+      const existingAnswers = existing.answers as Record<string, string>;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const existingQs = (existing as any).test?.questions ?? [];
+      const existingBreakdown = existingQs.map((q: Question) => ({
+        questionId:   q.id,
+        questionText: q.text,
+        selected:     existingAnswers[q.id] ?? null,
+        correct:      q.correctOption,
+        explanation:  q.explanation ?? undefined,
+        isCorrect:    existingAnswers[q.id] === q.correctOption,
+      }));
+      // 200 (not 201) signals: this is a replay, not a new creation
+      res.status(200).json({
+        data: {
+          ...existing,
+          percentage: Math.round((existing.score / existing.totalMarks) * 100),
+          breakdown: existingBreakdown,
+        },
+      });
+      return;
+    }
+  }
+
   let score = 0;
   const totalMarks = test.questions.length;
 
@@ -249,12 +283,13 @@ testsRouter.post('/:id/attempt', requireAuth(), async (req: Request, res: Respon
 
   const attempt = await prisma.testAttempt.create({
     data: {
-      userId:     req.user!.userId,
-      testId:     test.id,
+      userId:          req.user!.userId,
+      testId:          test.id,
       answers,
       score,
       totalMarks,
-      timeTaken:  timeTaken !== undefined ? timeTaken : null,
+      timeTaken:       timeTaken !== undefined ? timeTaken : null,
+      clientAttemptId: clientAttemptId ?? null,
     },
   });
 

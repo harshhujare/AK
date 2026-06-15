@@ -42,6 +42,7 @@ export default function TestRunnerPage() {
     currentQ,
     startedAt,
     isSubmitting,
+    clientAttemptId,
     startSession,
     setAnswer,
     goToQuestion,
@@ -100,6 +101,7 @@ export default function TestRunnerPage() {
       const { data } = await apiClient.post(`/api/tests/${test.id}/attempt`, {
         answers,
         timeTaken,
+        clientAttemptId: clientAttemptId ?? undefined,
       });
       const result = data.data;
       await saveResult({

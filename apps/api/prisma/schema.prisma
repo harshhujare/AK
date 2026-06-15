@@ -113,20 +113,27 @@ model Question {
 }
 
 model TestAttempt {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  testId      String
-  test        Test     @relation(fields: [testId], references: [id])
-  answers     Json     // { questionId: selectedOption }
-  score       Int
-  totalMarks  Int
-  timeTaken   Int?     // seconds — null for untimed test submissions
-  completedAt DateTime @default(now())
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  testId           String
+  test             Test     @relation(fields: [testId], references: [id])
+  answers          Json     // { questionId: selectedOption }
+  score            Int
+  totalMarks       Int
+  timeTaken        Int?     // seconds — null for untimed test submissions
+  completedAt      DateTime @default(now())
+
+  // ── Idempotency key — prevents double-submit at the database level ──────────
+  // The client generates a UUID before the POST and re-sends the same UUID on
+  // retry. A second INSERT with the same (userId, clientAttemptId) is silently
+  // returned as the existing row via upsert-or-return logic in the API handler.
+  clientAttemptId  String?  // nullable — older clients without the field still work
 
   // ── Performance indexes ─────────────────────────────────────────────────────
   @@index([testId, score])        // percentile: WHERE testId=? ORDER BY score
   @@index([userId, completedAt])  // history: WHERE userId=? ORDER BY completedAt DESC
+  @@unique([userId, clientAttemptId]) // idempotency: prevents double-submit
 }
 
 model Note {

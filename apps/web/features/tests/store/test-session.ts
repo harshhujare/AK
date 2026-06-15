@@ -25,10 +25,11 @@ import { persist } from 'zustand/middleware';
 
 // ─── Persisted shape (written to localStorage key 'test-session') ─────────────
 interface PersistedSession {
-  testId:    string | null; // ID of the test currently in progress
-  answers:   Record<string, string>; // { questionId: 'A'|'B'|'C'|'D' }
-  startedAt: number | null;          // Date.now() when the session began
-  currentQ:  number;                 // 0-based question index the user was on
+  testId:          string | null; // ID of the test currently in progress
+  clientAttemptId: string | null; // UUID for idempotency — generated once on startSession
+  answers:         Record<string, string>; // { questionId: 'A'|'B'|'C'|'D' }
+  startedAt:       number | null;          // Date.now() when the session began
+  currentQ:        number;                 // 0-based question index the user was on
 }
 
 // ─── Full store shape (persisted + transient) ─────────────────────────────────
@@ -55,10 +56,11 @@ interface TestSessionState extends PersistedSession {
 }
 
 const EMPTY_PERSISTED: PersistedSession = {
-  testId:    null,
-  answers:   {},
-  startedAt: null,
-  currentQ:  0,
+  testId:          null,
+  clientAttemptId: null,
+  answers:         {},
+  startedAt:       null,
+  currentQ:        0,
 };
 
 export const useTestSession = create<TestSessionState>()(
@@ -68,7 +70,14 @@ export const useTestSession = create<TestSessionState>()(
       isSubmitting: false,
 
       startSession: (testId) =>
-        set({ testId, answers: {}, startedAt: Date.now(), currentQ: 0, isSubmitting: false }),
+        set({
+          testId,
+          clientAttemptId: crypto.randomUUID(), // new UUID per test session
+          answers: {},
+          startedAt: Date.now(),
+          currentQ: 0,
+          isSubmitting: false,
+        }),
 
       setAnswer: (questionId, option) =>
         set((s) => ({ answers: { ...s.answers, [questionId]: option } })),
@@ -84,10 +93,11 @@ export const useTestSession = create<TestSessionState>()(
       // Only persist the fields required for session resume.
       // Actions and isSubmitting are excluded — they are re-created each mount.
       partialize: (s): PersistedSession => ({
-        testId:    s.testId,
-        answers:   s.answers,
-        startedAt: s.startedAt,
-        currentQ:  s.currentQ,
+        testId:          s.testId,
+        clientAttemptId: s.clientAttemptId,
+        answers:         s.answers,
+        startedAt:       s.startedAt,
+        currentQ:        s.currentQ,
       }),
     }
   )

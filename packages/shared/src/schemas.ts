@@ -47,8 +47,12 @@ export const CreateQuestionSchema = z.object({
 });
 
 export const SubmitAttemptSchema = z.object({
-  answers:   z.record(z.string().cuid(), z.enum(['A', 'B', 'C', 'D'])),
-  timeTaken: z.number().int().nonnegative().optional(), // optional for untimed tests
+  answers:          z.record(z.string().cuid(), z.enum(['A', 'B', 'C', 'D'])),
+  timeTaken:        z.number().int().nonnegative().optional(), // optional for untimed tests
+  // Idempotency key — client-generated UUID, sent by the runner before every POST.
+  // The server uses it to detect retries and return the existing attempt instead of
+  // creating a duplicate. Older clients that don't send this field still work (nullable).
+  clientAttemptId:  z.string().uuid().optional(),
 });
 
 // ─── Notes ────────────────────────────────────────────────────────────────────
