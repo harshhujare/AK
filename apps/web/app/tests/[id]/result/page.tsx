@@ -38,8 +38,45 @@ export default function ResultPage() {
   const testId    = params.id;
   const attemptId = searchParams.get('attemptId');
   const isQueued  = searchParams.get('queued') === 'true';
+  const isError   = searchParams.get('error') === 'submit_failed';
 
-  // ── Result data ─────────────────────────────────────────────────────────────
+  // ── Submit error screen (API returned 4xx/5xx while device was online) ───────
+  if (isError) {
+    return (
+      <div className="result-page">
+        <div className="result-queued">
+          <div className="queued-icon">⚠️</div>
+          <h1 className="queued-title">Submission Failed</h1>
+          <p className="queued-sub">
+            Your answers could not be submitted. This may be because the test has
+            ended or your subscription has expired. Please go back and try again.
+          </p>
+          <Link href="/tests" className="btn-result-home">Back to Tests</Link>
+        </div>
+        <style>{resultStyles}</style>
+      </div>
+    );
+  }
+
+  // ─── Queued offline screen ────────────────────────────────────────────────
+
+  if (isQueued) {
+    return (
+      <div className="result-page">
+        <div className="result-queued">
+          <div className="queued-icon">📡</div>
+          <h1 className="queued-title">Test Submitted Offline</h1>
+          <p className="queued-sub">
+            Your answers are saved on this device. They will be automatically
+            submitted when your internet connection is restored.
+          </p>
+          <Link href="/tests" className="btn-result-home">Back to Tests</Link>
+        </div>
+        <style>{resultStyles}</style>
+      </div>
+    );
+  }
+
   const [result,    setResult]    = useState<AttemptResult | null>(null);
   const [breakdown, setBreakdown] = useState<AttemptBreakdownItem[] | null>(null);
   const [loadingIDB, setLoadingIDB] = useState(!isQueued);
@@ -93,24 +130,6 @@ export default function ResultPage() {
       .catch(() => { /* percentile is supplementary — ignore failures */ });
   }, [result, testId]);
 
-  // ─── Queued offline screen ────────────────────────────────────────────────
-
-  if (isQueued) {
-    return (
-      <div className="result-page">
-        <div className="result-queued">
-          <div className="queued-icon">📡</div>
-          <h1 className="queued-title">Test Submitted Offline</h1>
-          <p className="queued-sub">
-            Your answers are saved on this device. They will be automatically
-            submitted when your internet connection is restored.
-          </p>
-          <Link href="/tests" className="btn-result-home">Back to Tests</Link>
-        </div>
-        <style>{resultStyles}</style>
-      </div>
-    );
-  }
 
   // ─── Loading ──────────────────────────────────────────────────────────────
 

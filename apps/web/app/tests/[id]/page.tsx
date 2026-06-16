@@ -12,7 +12,6 @@
 import { useEffect, useCallback, useState } from 'react';
 import { useParams, useRouter }             from 'next/navigation';
 import Link                                 from 'next/link';
-import { v4 as uuid }                       from 'uuid';
 
 import { useTest }          from '@/features/tests/hooks/useTest';
 import { useTestSession }   from '@/features/tests/store/test-session';
@@ -26,6 +25,7 @@ import { CountdownTimer }   from '@/features/tests/components/CountdownTimer';
 import apiClient            from '@/lib/api-client';
 import useAuthStore         from '@/lib/auth-store';
 import type { Question }    from '@ajitsir/shared';
+
 
 export default function TestRunnerPage() {
   const params   = useParams<{ id: string }>();
@@ -76,7 +76,7 @@ export default function TestRunnerPage() {
 
   // ── Submit handler ──────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
-    if (isSubmitting || !test) return;
+    if (isSubmitting || !test || !user) return;
     setShowSubmitSheet(false);
     markSubmitting();
 
@@ -84,13 +84,21 @@ export default function TestRunnerPage() {
       ? Math.floor((Date.now() - startedAt) / 1000)
       : null;
 
+    // Idempotency key: use the one from session (persists across crash/reload)
+    // so a retry after a crash reuses the same UUID and hits the server guard.
+    const attemptIdKey = clientAttemptId ?? crypto.randomUUID();
+
     if (!isOnline) {
+      // FIX: include userId + clientAttemptId so flush is user-scoped and
+      // the retry POST carries the idempotency key.
       await queuePendingAttempt({
-        id:       uuid(),
-        testId:   test.id,
+        id:              crypto.randomUUID(), // local queue row ID
+        userId:          user.id,
+        clientAttemptId: attemptIdKey,
+        testId:          test.id,
         answers,
         timeTaken,
-        queuedAt: Date.now(),
+        queuedAt:        Date.now(),
       });
       clearSession();
       router.push(`/tests/${test.id}/result?queued=true`);
@@ -101,11 +109,12 @@ export default function TestRunnerPage() {
       const { data } = await apiClient.post(`/api/tests/${test.id}/attempt`, {
         answers,
         timeTaken,
-        clientAttemptId: clientAttemptId ?? undefined,
+        clientAttemptId: attemptIdKey,
       });
       const result = data.data;
       await saveResult({
         id:        result.id,
+        userId:    user.id,
         testId:    test.id,
         testTitle: test.title,
         subjectId: test.subjectId,
@@ -113,18 +122,35 @@ export default function TestRunnerPage() {
       });
       clearSession();
       router.push(`/tests/${test.id}/result?attemptId=${result.id}`);
-    } catch {
-      await queuePendingAttempt({
-        id:       uuid(),
-        testId:   test.id,
-        answers,
-        timeTaken,
-        queuedAt: Date.now(),
-      });
-      clearSession();
-      router.push(`/tests/${test.id}/result?queued=true`);
+    } catch (err: unknown) {
+      // FIX (HIGH): only queue to IDB on genuine network failures.
+      // Do NOT queue on 4xx responses (e.g. 403 unpublished, 400 validation) —
+      // those would loop forever and cause the "offline screen when online" bug.
+      const isNetworkError = (
+        err instanceof TypeError ||             // fetch() network failure
+        (err as { code?: string })?.code === 'ERR_NETWORK' // axios network error
+      );
+
+      if (isNetworkError) {
+        await queuePendingAttempt({
+          id:              crypto.randomUUID(),
+          userId:          user.id,
+          clientAttemptId: attemptIdKey,
+          testId:          test.id,
+          answers,
+          timeTaken,
+          queuedAt:        Date.now(),
+        });
+        clearSession();
+        router.push(`/tests/${test.id}/result?queued=true`);
+      } else {
+        // API returned a proper error (4xx/5xx) — show it, don't pretend offline
+        clearSession();
+        router.push(`/tests/${test.id}/result?error=submit_failed`);
+      }
     }
-  }, [isSubmitting, test, markSubmitting, startedAt, isOnline, answers, clearSession, router]);
+  }, [isSubmitting, test, user, markSubmitting, startedAt, clientAttemptId, isOnline, answers, clearSession, router]);
+
 
   // ── Timer auto-submit (bypasses confirmation sheet) ─────────────────────────
   const handleTimerExpire = useCallback(() => {

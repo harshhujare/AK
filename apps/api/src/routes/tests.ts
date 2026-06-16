@@ -26,14 +26,33 @@ export const testsRouter = Router();
  *   date=YYYY-MM-DD   (for DAILY: returns test whose scheduledAt falls on that day)
  *
  * Students always receive only isPublished=true tests.
- * Admins/Content Managers can pass ?published=false to see drafts.
+ * Admins/Content Managers can pass ?published=false to see drafts — but ONLY
+ * when authenticated with CONTENT_MANAGER or SUPER_ADMIN role.
+ *
+ * FIX (HIGH): showDrafts was previously based solely on the query string,
+ * allowing any anonymous caller to list drafts.
  */
 testsRouter.get('/', async (req: Request, res: Response) => {
   const { type, subjectId, date, published } = req.query;
 
-  // Determine whether to filter by isPublished.
-  // Default: only published. Admin can explicitly request drafts via ?published=false.
-  const showDrafts = published === 'false';
+  // Resolve the caller's role from the JWT (if present).
+  // We don't use requireAuth() here so the list remains usable without login.
+  let callerRole: string | null = null;
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      const { verifyAccessToken } = await import('../services/token');
+      const payload = verifyAccessToken(authHeader.slice(7));
+      callerRole = payload.role;
+    }
+  } catch {
+    // Invalid / expired token → treat as unauthenticated
+  }
+
+  const isAdmin = callerRole === 'SUPER_ADMIN' || callerRole === 'CONTENT_MANAGER';
+
+  // Only admins may request drafts — all other callers always get isPublished=true
+  const showDrafts = isAdmin && published === 'false';
 
   const where: Prisma.TestWhereInput = {
     ...(showDrafts ? {} : { isPublished: true }),
@@ -75,6 +94,9 @@ testsRouter.get('/', async (req: Request, res: Response) => {
  * GET /api/tests/attempts/me
  * Returns the authenticated student's attempt history — paginated.
  *
+ * FIX (MEDIUM): cursor-based pagination now orders by [completedAt DESC, id DESC]
+ * to give a stable total order even when multiple attempts share a timestamp.
+ *
  * Query params:
  *   limit=20      (max 50)
  *   cursor=<cuid> (last id from previous page)
@@ -86,7 +108,8 @@ testsRouter.get('/attempts/me', requireAuth(), async (req: Request, res: Respons
   const attempts = await prisma.testAttempt.findMany({
     where:   { userId: req.user!.userId },
     include: { test: { select: { id: true, title: true, subjectId: true } } },
-    orderBy: { completedAt: 'desc' },
+    // FIX: secondary sort on id ensures stable pages when completedAt ties
+    orderBy: [{ completedAt: 'desc' }, { id: 'desc' }],
     take:    limit + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
@@ -103,6 +126,9 @@ testsRouter.get('/attempts/me', requireAuth(), async (req: Request, res: Respons
  * Returns test metadata + questions for students.
  * correctOption and explanation are deliberately excluded (server-side scoring only).
  * Enforces plan gate for paid tests.
+ *
+ * FIX (HIGH): now enforces isPublished=true and scheduledAt/expiresAt windows for
+ * student roles — previously a student with the test ID could bypass draft visibility.
  */
 testsRouter.get('/:id', requireAuth(), async (req: Request, res: Response) => {
   const id = String(req.params.id);
@@ -129,13 +155,49 @@ testsRouter.get('/:id', requireAuth(), async (req: Request, res: Response) => {
     return;
   }
 
-  // Gate paid tests (admins bypass)
   const role = req.user!.role;
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'CONTENT_MANAGER';
+
+  // FIX (HIGH): students may not access unpublished or time-windowed tests by ID.
+  // Admins bypass these checks so they can preview draft/future tests.
+  if (!isAdmin) {
+    if (!test.isPublished) {
+      res.status(404).json({ error: 'Test not found' });
+      return;
+    }
+
+    const now = new Date();
+
+    // For PREDEFINED tests: enforce the scheduledAt–expiresAt access window
+    if (test.type === 'PREDEFINED') {
+      if (test.scheduledAt && now < test.scheduledAt) {
+        res.status(403).json({ error: 'This test is not yet available' });
+        return;
+      }
+      if (test.expiresAt && now > test.expiresAt) {
+        res.status(403).json({ error: 'This test has expired' });
+        return;
+      }
+    }
+
+    // For DAILY tests: enforce the scheduled calendar day only
+    if (test.type === 'DAILY' && test.scheduledAt) {
+      const testDay = new Date(test.scheduledAt);
+      testDay.setUTCHours(0, 0, 0, 0);
+      const nextDay = new Date(testDay);
+      nextDay.setUTCDate(testDay.getUTCDate() + 1);
+      if (now < testDay || now >= nextDay) {
+        res.status(403).json({ error: 'This daily test is only available on its scheduled day' });
+        return;
+      }
+    }
+  }
+
+  // Gate paid tests (admins bypass)
   if (
     test.isPaid &&
     req.user!.plan === 'FREE' &&
-    role !== 'SUPER_ADMIN' &&
-    role !== 'CONTENT_MANAGER'
+    !isAdmin
   ) {
     res.status(403).json({ error: 'This test requires a paid subscription' });
     return;
@@ -198,6 +260,9 @@ testsRouter.get('/:id/attempt/:attemptId', requireAuth(), async (req: Request, r
  * POST /api/tests/:id/attempt
  * Scores a student's answers server-side and persists the TestAttempt.
  * Score is NEVER calculated on the frontend — this is the source of truth.
+ *
+ * FIX (HIGH): now enforces isPublished + scheduledAt/expiresAt before scoring,
+ * so students cannot submit against unpublished or expired tests.
  */
 testsRouter.post('/:id/attempt', requireAuth(), async (req: Request, res: Response) => {
   const parsed = SubmitAttemptSchema.safeParse(req.body);
@@ -218,11 +283,44 @@ testsRouter.post('/:id/attempt', requireAuth(), async (req: Request, res: Respon
   }
 
   const role = req.user!.role;
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'CONTENT_MANAGER';
+
+  // FIX (HIGH): enforce published + time windows on submit (same rules as GET /:id)
+  if (!isAdmin) {
+    if (!test.isPublished) {
+      res.status(404).json({ error: 'Test not found' });
+      return;
+    }
+
+    const now = new Date();
+
+    if (test.type === 'PREDEFINED') {
+      if (test.scheduledAt && now < test.scheduledAt) {
+        res.status(403).json({ error: 'This test is not yet available' });
+        return;
+      }
+      if (test.expiresAt && now > test.expiresAt) {
+        res.status(403).json({ error: 'This test has expired' });
+        return;
+      }
+    }
+
+    if (test.type === 'DAILY' && test.scheduledAt) {
+      const testDay = new Date(test.scheduledAt);
+      testDay.setUTCHours(0, 0, 0, 0);
+      const nextDay = new Date(testDay);
+      nextDay.setUTCDate(testDay.getUTCDate() + 1);
+      if (now < testDay || now >= nextDay) {
+        res.status(403).json({ error: 'This daily test is only available on its scheduled day' });
+        return;
+      }
+    }
+  }
+
   if (
     test.isPaid &&
     req.user!.plan === 'FREE' &&
-    role !== 'SUPER_ADMIN' &&
-    role !== 'CONTENT_MANAGER'
+    !isAdmin
   ) {
     res.status(403).json({ error: 'Paid subscription required' });
     return;
@@ -232,9 +330,6 @@ testsRouter.post('/:id/attempt', requireAuth(), async (req: Request, res: Respon
   const { answers, timeTaken, clientAttemptId } = parsed.data;
 
   // ── Idempotency: return existing attempt if clientAttemptId was already used ──
-  // This fires when the network drops AFTER the server wrote the row but BEFORE
-  // the response reached the client. The client retries with the same UUID; we
-  // return the existing result without creating a duplicate attempt.
   if (clientAttemptId) {
     const existing = await prisma.testAttempt.findUnique({
       where: { userId_clientAttemptId: { userId: req.user!.userId, clientAttemptId } },
@@ -252,7 +347,6 @@ testsRouter.post('/:id/attempt', requireAuth(), async (req: Request, res: Respon
         explanation:  q.explanation ?? undefined,
         isCorrect:    existingAnswers[q.id] === q.correctOption,
       }));
-      // 200 (not 201) signals: this is a replay, not a new creation
       res.status(200).json({
         data: {
           ...existing,
@@ -306,12 +400,10 @@ testsRouter.post('/:id/attempt', requireAuth(), async (req: Request, res: Respon
  * GET /api/tests/:id/percentile
  * Returns the student's percentile for their best attempt on this test.
  * Server-side guard: returns { percentile: null } when total attempts < 10.
- * This prevents an expensive COUNT query for low-traffic tests.
  */
 testsRouter.get('/:id/percentile', requireAuth(), async (req: Request, res: Response) => {
   const testId = req.params.id;
 
-  // ── Server-side minimum threshold guard ──────────────────────────────────
   const total = await prisma.testAttempt.count({ where: { testId: String(req.params.id) } });
   if (total < 10) {
     res.json({ data: { percentile: null, reason: 'insufficient_data', total } });
@@ -405,7 +497,6 @@ testsRouter.put('/:id', requireAdmin(), async (req: Request, res: Response) => {
 /**
  * PATCH /api/tests/:id
  * Inline publish/unpublish toggle — single-field update used by the admin list table.
- * Does not require a full PUT body.
  */
 testsRouter.patch('/:id', requireAdmin(), async (req: Request, res: Response) => {
   if (typeof req.body.isPublished !== 'boolean') {
@@ -469,11 +560,23 @@ testsRouter.post('/:id/questions', requireAdmin(), async (req: Request, res: Res
 /**
  * PUT /api/tests/:testId/questions/:qId
  * Edits an existing question (text, options, correctOption, explanation, order).
+ *
+ * FIX (HIGH): now scopes the update by both testId AND qId, preventing an admin
+ * from updating a question that belongs to a different test via URL manipulation.
  */
 testsRouter.put('/:testId/questions/:qId', requireAdmin(), async (req: Request, res: Response) => {
   const parsed = CreateQuestionSchema.partial().safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+    return;
+  }
+
+  // FIX: scope by testId so a question ID from another test cannot be mutated
+  const existing = await prisma.question.findFirst({
+    where: { id: String(req.params.qId), testId: String(req.params.testId) },
+  });
+  if (!existing) {
+    res.status(404).json({ error: 'Question not found' });
     return;
   }
 
@@ -488,8 +591,19 @@ testsRouter.put('/:testId/questions/:qId', requireAdmin(), async (req: Request, 
 /**
  * DELETE /api/tests/:testId/questions/:qId
  * Deletes a single question from a test.
+ *
+ * FIX (HIGH): scoped by testId — prevents cross-test question deletion.
  */
 testsRouter.delete('/:testId/questions/:qId', requireAdmin(), async (req: Request, res: Response) => {
+  // FIX: scope by testId before deleting
+  const existing = await prisma.question.findFirst({
+    where: { id: String(req.params.qId), testId: String(req.params.testId) },
+  });
+  if (!existing) {
+    res.status(404).json({ error: 'Question not found' });
+    return;
+  }
+
   await prisma.question.delete({ where: { id: String(req.params.qId) } });
   res.json({ data: { message: 'Question deleted' } });
 });

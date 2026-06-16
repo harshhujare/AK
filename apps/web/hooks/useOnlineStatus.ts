@@ -8,9 +8,12 @@
  *
  * When connectivity is restored, `flushPendingAttempts()` is called once to
  * drain the IDB offline submission queue — no user action required.
+ *
+ * FIX (HIGH): flush now filters by userId so pending attempts from a previous
+ * user session are not submitted under the currently logged-in user's JWT.
  */
 import { useState, useEffect, useRef } from 'react';
-import { getAllPending, deletePending, queuePendingAttempt, saveResult } from '@/features/tests/lib/test-results-db';
+import { getPendingForUser, deletePending, queuePendingAttempt, saveResult } from '@/features/tests/lib/test-results-db';
 import useAuthStore from '@/lib/auth-store';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
@@ -25,18 +28,24 @@ const PROBE_TIMEOUT_MS  = 5_000;  // 5 s
  * Drains the IDB `pending-attempts` store by posting each queued attempt to
  * the server. Called once when the device transitions from offline → online.
  *
+ * FIX (HIGH): now scoped to the currently logged-in user's pending attempts.
+ * A queued attempt from user A is never flushed under user B's JWT.
+ *
  * Critical ordering guarantee:
  *  - `deletePending(id)` is called BEFORE the POST, not after.
  *    This prevents a double-submit even if the POST hangs and the user kills
  *    the page between the delete and the server response.
  *  - On network failure the attempt is re-queued for the next reconnect.
+ *  - clientAttemptId is forwarded so the server's idempotency guard fires if
+ *    the first POST actually succeeded but the response was lost.
  */
 async function flushPendingAttempts(): Promise<void> {
-  const pending = await getAllPending();
-  if (pending.length === 0) return;
+  const { accessToken, user } = useAuthStore.getState();
+  if (!accessToken || !user) return; // not logged in — skip flush
 
-  const token = useAuthStore.getState().accessToken;
-  if (!token) return; // not logged in — skip flush, queue will be drained after next login
+  // FIX: only flush THIS user's pending attempts
+  const pending = await getPendingForUser(user.id);
+  if (pending.length === 0) return;
 
   for (const item of pending) {
     // Delete-before-POST: prevents double-submit on page kill mid-flight
@@ -47,9 +56,14 @@ async function flushPendingAttempts(): Promise<void> {
         method:  'POST',
         headers: {
           'Content-Type':  'application/json',
-          Authorization:   `Bearer ${token}`,
+          Authorization:   `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ answers: item.answers, timeTaken: item.timeTaken }),
+        // FIX: forward clientAttemptId so server idempotency guard deduplicates
+        body: JSON.stringify({
+          answers:         item.answers,
+          timeTaken:       item.timeTaken,
+          clientAttemptId: item.clientAttemptId,
+        }),
       });
 
       if (res.ok) {
@@ -58,6 +72,7 @@ async function flushPendingAttempts(): Promise<void> {
         // Save the now-confirmed result to IDB for the Result page
         await saveResult({
           id:        result.id,
+          userId:    user.id,
           testId:    item.testId,
           testTitle: '',         // will be filled in by the Result page from RQ cache
           subjectId: '',

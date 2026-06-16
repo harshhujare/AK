@@ -4,7 +4,7 @@ import apiClient, { isTransientAuthError } from './api-client';
 import { pdfCacheClearAll } from './pdf-cache';
 // IDB test history — cleared on logout to prevent cross-user data leakage
 // on shared/school devices. Import is lazy-safe: getDB() only runs in browser.
-import { clearResults } from '@/features/tests/lib/test-results-db';
+import { clearResultsForUser, clearPendingForUser } from '@/features/tests/lib/test-results-db';
 // Lean session store — cleared on logout so a stale session doesn't resume
 import { useTestSession } from '@/features/tests/store/test-session';
 
@@ -83,12 +83,21 @@ const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       // Ignore errors on logout — clear state regardless
     }
+
+    // Capture userId BEFORE wiping state so we can scope the IDB clears
+    const userId = get().user?.id;
+
     // Wipe cached PDFs — critical for shared/school computers
     await pdfCacheClearAll();
 
-    // Wipe IDB test results — prevents cross-user leakage on shared devices.
-    // clearResults() deliberately does NOT touch pending-attempts.
-    try { await clearResults(); } catch { /* IDB unavailable — ignore */ }
+    // FIX (HIGH): wipe only THIS user's IDB data.
+    // clearResultsForUser + clearPendingForUser prevents:
+    //  a) result leakage to the next user on a shared device
+    //  b) pending offline attempts from user A being flushed under user B's JWT
+    if (userId) {
+      try { await clearResultsForUser(userId); } catch { /* IDB unavailable */ }
+      try { await clearPendingForUser(userId); } catch { /* IDB unavailable */ }
+    }
 
     // Clear active test session (answers, current question index)
     useTestSession.getState().clearSession();

@@ -11,15 +11,19 @@
  *
  * Design constraints for ₹8,000 Android WebViews:
  *  - Results are capped at 200 entries (LRU eviction) and 50 KB per entry.
- *  - clearResults() deliberately does NOT clear pending-attempts so a
- *    queued offline submission is not lost on logout.
+ *
+ * FIX (HIGH): pending-attempts are now user-scoped.
+ *  - PendingAttempt stores userId so flushPendingAttempts only processes
+ *    attempts belonging to the currently logged-in user.
+ *  - clearPendingForUser() is called on logout so orphaned queued attempts
+ *    from the previous user do not survive to the next login.
  */
 import { openDB, type IDBPDatabase } from 'idb';
 import type { AttemptResult } from '@ajitsir/shared';
 
 // ─── DB constants ─────────────────────────────────────────────────────────────
 const DB_NAME         = 'ajitsir-test-results';
-const DB_VER          = 1;
+const DB_VER          = 2;  // bumped: adds userId index on pending-attempts store
 const RESULTS_STORE   = 'results';
 const PENDING_STORE   = 'pending-attempts';
 const MAX_RESULTS     = 200;
@@ -35,16 +39,19 @@ export interface StoredResult {
   subjectId:  string;
   result:     AttemptResult;
   savedAt:    number;  // Date.now() — used for LRU eviction
+  userId:     string;  // owner — used to clear on logout
 }
 
 /** What goes into the `pending-attempts` IDB store. */
 export interface PendingAttempt {
   /** Local UUID — NOT the server attempt ID (assigned later). */
-  id:        string;
-  testId:    string;
-  answers:   Record<string, string>;
-  timeTaken: number | null;
-  queuedAt:  number;  // Date.now()
+  id:               string;
+  userId:           string;  // FIX: scope to user so flush only sends their attempts
+  clientAttemptId:  string;  // FIX: carry the idempotency key so retries deduplicate
+  testId:           string;
+  answers:          Record<string, string>;
+  timeTaken:        number | null;
+  queuedAt:         number;  // Date.now()
 }
 
 // ─── DB singleton ─────────────────────────────────────────────────────────────
@@ -53,18 +60,28 @@ let _db: IDBPDatabase | null = null;
 async function getDB(): Promise<IDBPDatabase> {
   if (!_db) {
     _db = await openDB(DB_NAME, DB_VER, {
-      upgrade(db) {
+      upgrade(db, oldVersion, _newVersion, tx) {
         // results store — keyed by attempt ID
         if (!db.objectStoreNames.contains(RESULTS_STORE)) {
           const rs = db.createObjectStore(RESULTS_STORE, { keyPath: 'id' });
           rs.createIndex('by_testId',  'testId');    // getResultsByTest()
           rs.createIndex('by_savedAt', 'savedAt');   // LRU eviction sort
           rs.createIndex('by_subject', 'subjectId'); // future subject history
+          rs.createIndex('by_userId',  'userId');    // clearResultsForUser()
         }
 
         // pending-attempts store — keyed by local UUID
         if (!db.objectStoreNames.contains(PENDING_STORE)) {
-          db.createObjectStore(PENDING_STORE, { keyPath: 'id' });
+          const ps = db.createObjectStore(PENDING_STORE, { keyPath: 'id' });
+          // FIX: index by userId so we can flush/clear per-user
+          ps.createIndex('by_userId', 'userId');
+        } else if (oldVersion < 2) {
+          // Upgrade path: v1 store exists but has no userId index — add it.
+          // The upgrade transaction gives access to existing stores.
+          const ps = tx.objectStore(PENDING_STORE);
+          if (!ps.indexNames.contains('by_userId')) {
+            ps.createIndex('by_userId', 'userId');
+          }
         }
       },
     });
@@ -125,9 +142,22 @@ export async function getAllResults(): Promise<StoredResult[]> {
 }
 
 /**
- * Clears the results store.
- * NOTE: deliberately does NOT clear pending-attempts — an offline submission
- * must not be lost just because the user logged out on a shared device.
+ * Clears results belonging to a specific user.
+ * Called on logout to prevent cross-user leakage on shared devices.
+ *
+ * FIX: replaces clearResults() (which cleared ALL results regardless of owner).
+ */
+export async function clearResultsForUser(userId: string): Promise<void> {
+  const db = await getDB();
+  const rows = await db.getAllFromIndex(RESULTS_STORE, 'by_userId', userId);
+  const tx = db.transaction(RESULTS_STORE, 'readwrite');
+  await Promise.all(rows.map((r) => tx.store.delete(r.id)));
+  await tx.done;
+}
+
+/**
+ * @deprecated Use clearResultsForUser(userId) instead.
+ * Kept for backwards compatibility — clears ALL results (original behaviour).
  */
 export async function clearResults(): Promise<void> {
   const db = await getDB();
@@ -146,7 +176,19 @@ export async function queuePendingAttempt(attempt: PendingAttempt): Promise<void
   await db.put(PENDING_STORE, attempt);
 }
 
-/** Returns all queued pending attempts. */
+/**
+ * Returns all queued pending attempts for a specific user.
+ * FIX: was getAllPending() with no user filter — now scoped by userId.
+ */
+export async function getPendingForUser(userId: string): Promise<PendingAttempt[]> {
+  const db = await getDB();
+  return db.getAllFromIndex(PENDING_STORE, 'by_userId', userId);
+}
+
+/**
+ * @deprecated Use getPendingForUser(userId) instead.
+ * Kept for flush-on-login code that already has the userId from auth store.
+ */
 export async function getAllPending(): Promise<PendingAttempt[]> {
   const db = await getDB();
   return db.getAll(PENDING_STORE);
@@ -160,4 +202,17 @@ export async function getAllPending(): Promise<PendingAttempt[]> {
 export async function deletePending(id: string): Promise<void> {
   const db = await getDB();
   await db.delete(PENDING_STORE, id);
+}
+
+/**
+ * Clears all pending attempts for a specific user.
+ * FIX (HIGH): called on logout so a previous user's offline submissions are not
+ * flushed under the next user's JWT.
+ */
+export async function clearPendingForUser(userId: string): Promise<void> {
+  const db = await getDB();
+  const rows = await db.getAllFromIndex(PENDING_STORE, 'by_userId', userId);
+  const tx = db.transaction(PENDING_STORE, 'readwrite');
+  await Promise.all(rows.map((r) => tx.store.delete(r.id)));
+  await tx.done;
 }
