@@ -48,11 +48,10 @@ app.use(express.json());
 app.use(cookieParser());
 
 // ─── Health check (also pings DB to keep Neon awake) ──────────────────────────
-// GET /health
+// GET /health  — used by Render health checks and GitHub Actions keep-alive cron
+// GET /api/ping — used by the frontend useOnlineStatus probe
 // Returns { status: 'ok', db: 'ok'|'error', timestamp }
-// A lightweight SELECT 1 is enough to prevent Neon scale-to-zero.
-// The GitHub Actions keep-alive cron hits this endpoint every 14 min.
-app.get('/health', async (_req, res) => {
+const healthHandler = async (_req: express.Request, res: express.Response) => {
   let dbStatus = 'error';
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -62,7 +61,10 @@ app.get('/health', async (_req, res) => {
     // (Neon may be in the middle of resuming; the next ping will catch it)
   }
   res.json({ status: 'ok', db: dbStatus, timestamp: new Date().toISOString() });
-});
+};
+
+app.get('/health',   healthHandler); // Render + CI
+app.get('/api/ping', healthHandler); // frontend useOnlineStatus probe
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRouter);
