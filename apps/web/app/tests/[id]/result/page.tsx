@@ -7,9 +7,17 @@
  *  2. If ?attemptId=xxx: read from IDB (instant, offline-capable)
  *     → If IDB miss (new device): fetch from server GET /:id/attempt/:attemptId
  *  3. Percentile: GET /api/tests/:id/percentile (shown only when ≥10 attempts)
+ *
+ * FIX (HIGH): moved ALL hooks before any conditional return to satisfy
+ *   React's Rules of Hooks (ESLint react-hooks/rules-of-hooks).
+ * FIX (HIGH): loadingIDB now initialises to false and is set true only when
+ *   there is an attemptId to look up — eliminates infinite skeleton when
+ *   attemptId is absent.
+ * FIX: server-fallback error state is now checked so skeleton resolves even
+ *   when the API call fails.
  */
 import { useEffect, useState } from 'react';
-import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 import { ScoreRing, gradeInfo } from '@/features/tests/components/ScoreRing';
@@ -33,53 +41,19 @@ function formatTime(secs: number | null): string {
 export default function ResultPage() {
   const params       = useParams<{ id: string }>();
   const searchParams = useSearchParams();
-  const router       = useRouter();
 
   const testId    = params.id;
   const attemptId = searchParams.get('attemptId');
   const isQueued  = searchParams.get('queued') === 'true';
   const isError   = searchParams.get('error') === 'submit_failed';
 
-  // ── Submit error screen (API returned 4xx/5xx while device was online) ───────
-  if (isError) {
-    return (
-      <div className="result-page">
-        <div className="result-queued">
-          <div className="queued-icon">⚠️</div>
-          <h1 className="queued-title">Submission Failed</h1>
-          <p className="queued-sub">
-            Your answers could not be submitted. This may be because the test has
-            ended or your subscription has expired. Please go back and try again.
-          </p>
-          <Link href="/tests" className="btn-result-home">Back to Tests</Link>
-        </div>
-        <style>{resultStyles}</style>
-      </div>
-    );
-  }
-
-  // ─── Queued offline screen ────────────────────────────────────────────────
-
-  if (isQueued) {
-    return (
-      <div className="result-page">
-        <div className="result-queued">
-          <div className="queued-icon">📡</div>
-          <h1 className="queued-title">Test Submitted Offline</h1>
-          <p className="queued-sub">
-            Your answers are saved on this device. They will be automatically
-            submitted when your internet connection is restored.
-          </p>
-          <Link href="/tests" className="btn-result-home">Back to Tests</Link>
-        </div>
-        <style>{resultStyles}</style>
-      </div>
-    );
-  }
-
+  // ── All hooks declared unconditionally (Rules of Hooks) ──────────────────
+  // FIX: loadingIDB starts false; set to true inside effect only when there
+  //      is a real attemptId to resolve.  Previously it defaulted to !isQueued
+  //      which caused an infinite skeleton when attemptId was missing.
   const [result,    setResult]    = useState<AttemptResult | null>(null);
   const [breakdown, setBreakdown] = useState<AttemptBreakdownItem[] | null>(null);
-  const [loadingIDB, setLoadingIDB] = useState(!isQueued);
+  const [loadingIDB, setLoadingIDB] = useState(false);
 
   // Server fallback (React Query — only fires if IDB miss)
   const [needsServerFallback, setNeedsServerFallback] = useState(false);
@@ -92,7 +66,10 @@ export default function ResultPage() {
   const [percentile, setPercentile] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!attemptId || isQueued) return;
+    // Skip IDB lookup for queued / error / missing-attemptId paths
+    if (!attemptId || isQueued || isError) return;
+
+    setLoadingIDB(true);
 
     // 1. Try IDB first
     getResultsByTest(testId).then((stored) => {
@@ -110,7 +87,8 @@ export default function ResultPage() {
       setLoadingIDB(false);
       setNeedsServerFallback(true);
     });
-  }, [testId, attemptId, isQueued]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [testId, attemptId]);
 
   // ── Hydrate from server fallback ────────────────────────────────────────────
   useEffect(() => {
@@ -131,13 +109,70 @@ export default function ResultPage() {
   }, [result, testId]);
 
 
-  // ─── Loading ──────────────────────────────────────────────────────────────
+  // ── Conditional renders (after all hooks) ──────────────────────────────────
 
+  // Submit error screen
+  if (isError) {
+    return (
+      <div className="result-page">
+        <div className="result-queued">
+          <div className="queued-icon">⚠️</div>
+          <h1 className="queued-title">Submission Failed</h1>
+          <p className="queued-sub">
+            Your answers could not be submitted. This may be because the test has
+            ended or your subscription has expired. Please go back and try again.
+          </p>
+          <Link href="/tests" className="btn-result-home">Back to Tests</Link>
+        </div>
+        <style>{resultStyles}</style>
+      </div>
+    );
+  }
+
+  // Queued offline screen
+  if (isQueued) {
+    return (
+      <div className="result-page">
+        <div className="result-queued">
+          <div className="queued-icon">📡</div>
+          <h1 className="queued-title">Test Submitted Offline</h1>
+          <p className="queued-sub">
+            Your answers are saved on this device. They will be automatically
+            submitted when your internet connection is restored.
+          </p>
+          <Link href="/tests" className="btn-result-home">Back to Tests</Link>
+        </div>
+        <style>{resultStyles}</style>
+      </div>
+    );
+  }
+
+  // ─── Loading ──────────────────────────────────────────────────────────────
+  // FIX: also bail out of skeleton only when server fallback finishes (isLoading false)
   if (loadingIDB || (needsServerFallback && serverResult.isLoading)) {
     return <ResultSkeleton />;
   }
 
-  // ─── Error ────────────────────────────────────────────────────────────────
+  // ─── Server fallback error ───────────────────────────────────────────────
+  // FIX: previously unchecked — skeleton would freeze forever on API failure
+  if (needsServerFallback && serverResult.isError) {
+    return (
+      <div className="result-page">
+        <div className="result-queued">
+          <div className="queued-icon">⚠️</div>
+          <h1 className="queued-title">Could not load result</h1>
+          <p className="queued-sub">
+            We couldn't reach the server to fetch your result. Please check your
+            connection and try again.
+          </p>
+          <Link href="/tests" className="btn-result-home">Back to Tests</Link>
+        </div>
+        <style>{resultStyles}</style>
+      </div>
+    );
+  }
+
+  // ─── No result data ───────────────────────────────────────────────────────
 
   if (!result) {
     return (

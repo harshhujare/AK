@@ -27,7 +27,7 @@ const DB_VER          = 2;  // bumped: adds userId index on pending-attempts sto
 const RESULTS_STORE   = 'results';
 const PENDING_STORE   = 'pending-attempts';
 const MAX_RESULTS     = 200;
-const MAX_BYTES       = 50_000; // skip entries > 50 KB — prevents OOM on low-RAM devices
+const MAX_BYTES       = 200_000; // 200 KB — large enough for full breakdowns on low-RAM devices
 
 // ─── Stored shape ────────────────────────────────────────────────────────────
 
@@ -93,18 +93,31 @@ async function getDB(): Promise<IDBPDatabase> {
 
 /**
  * Saves an AttemptResult to IDB.
- * Silently skips if the serialised result exceeds MAX_BYTES.
+ * If the full entry exceeds MAX_BYTES, falls back to storing a summary-only
+ * entry (breakdown stripped) so the result page always has something in IDB.
  * Evicts the oldest entries if the store grows past MAX_RESULTS.
  */
 export async function saveResult(stored: Omit<StoredResult, 'savedAt'>): Promise<void> {
-  const entry: StoredResult = { ...stored, savedAt: Date.now() };
-  const blob = JSON.stringify(entry);
+  let entry: StoredResult = { ...stored, savedAt: Date.now() };
+  let blob = JSON.stringify(entry);
 
   if (blob.length > MAX_BYTES) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn('[IDB] Result too large, skipping:', blob.length, 'bytes');
+    // Graceful degradation: store without per-question breakdown
+    const resultWithoutBreakdown = { ...stored.result, breakdown: undefined };
+    entry = { ...entry, result: resultWithoutBreakdown as typeof stored.result };
+    blob = JSON.stringify(entry);
+
+    if (blob.length > MAX_BYTES) {
+      // Still too large (pathological case) — log and skip
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[IDB] Result too large even without breakdown, skipping:', blob.length, 'bytes');
+      }
+      return;
     }
-    return;
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('[IDB] Result stored without breakdown (too large):', blob.length, 'bytes');
+    }
   }
 
   const db = await getDB();

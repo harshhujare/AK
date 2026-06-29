@@ -69,6 +69,11 @@ export default function QuestionEditorPage() {
   const [deleting,   setDeleting]   = useState<string | null>(null);
   const [toggling,   setToggling]   = useState(false);
 
+  // Import modal
+  const [importOpen,    setImportOpen]    = useState(false);
+  const [importing,     setImporting]     = useState(false);
+  const [importResult,  setImportResult]  = useState<{ count: number } | null>(null);
+
   // Mobile: show form panel
   const [mobileFormOpen, setMobileFormOpen] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
@@ -203,6 +208,26 @@ export default function QuestionEditorPage() {
     }
   };
 
+  // ── Bulk import ───────────────────────────────────────────────────────────
+  const handleImport = useCallback(async (questions: unknown[]) => {
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const { data } = await apiClient.post(`/api/tests/${testId}/questions/bulk`, { questions });
+      setImportResult({ count: data.data.count });
+      // Refresh question list
+      const qRes = await apiClient.get(`/api/tests/${testId}/questions`);
+      const qs = (qRes.data.data as AdminQuestion[]).sort((a, b) => a.order - b.order);
+      setQuestions(qs);
+      setForm((f) => ({ ...f, order: qs.length }));
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      throw new Error(msg ?? 'Import failed. Please try again.');
+    } finally {
+      setImporting(false);
+    }
+  }, [testId]);
+
   // ─── Render ───────────────────────────────────────────────────────────────
 
   if (loading) return <EditorSkeleton />;
@@ -244,7 +269,10 @@ export default function QuestionEditorPage() {
               {toggling ? '…' : isPublished ? 'Unpublish' : 'Publish'}
             </button>
             <button className="qe-btn-add-mobile" onClick={startNew}>
-              + Add Question
+              + Add
+            </button>
+            <button className="qe-btn-import-mobile" onClick={() => { setImportOpen(true); setImportResult(null); }}>
+              ⬆ JSON
             </button>
           </div>
         </div>
@@ -284,10 +312,19 @@ export default function QuestionEditorPage() {
           )}
         </div>
 
-        {/* Add question button (desktop only) */}
-        <button className="qe-btn-add" onClick={startNew} id="qe-add-q-btn">
-          + Add Question
-        </button>
+        {/* Add question + Import buttons (desktop only) */}
+        <div className="qe-bottom-btns">
+          <button className="qe-btn-add" onClick={startNew} id="qe-add-q-btn">
+            + Add Question
+          </button>
+          <button
+            className="qe-btn-import"
+            onClick={() => { setImportOpen(true); setImportResult(null); }}
+            id="qe-import-btn"
+          >
+            ⬆ Import JSON
+          </button>
+        </div>
       </aside>
 
       {/* ── Right panel — question form ─────────────────────────────── */}
@@ -409,6 +446,286 @@ export default function QuestionEditorPage() {
       </div>
 
       <style>{styles}</style>
+
+      {/* ── Import modal ─────────────────────────────────────────── */}
+      {importOpen && (
+        <ImportModal
+          onImport={handleImport}
+          onClose={() => setImportOpen(false)}
+          importing={importing}
+          lastResult={importResult}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Import Modal ─────────────────────────────────────────────────────────────
+
+interface ParsedQuestion {
+  raw:           unknown;
+  text?:         string;
+  correctOption?: string;
+  errors:        string[];
+}
+
+function validateQuestion(raw: unknown, index: number): ParsedQuestion {
+  const errors: string[] = [];
+
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { raw, errors: [`Question #${index + 1} is not a valid object`] };
+  }
+
+  const q = raw as Record<string, unknown>;
+
+  // text
+  if (typeof q.text !== 'string' || q.text.trim().length < 5) {
+    errors.push('text must be a string with ≥ 5 characters');
+  }
+
+  // options
+  if (!Array.isArray(q.options)) {
+    errors.push('options must be an array');
+  } else if (q.options.length !== 4) {
+    errors.push(`options must have exactly 4 items (found ${q.options.length})`);
+  } else {
+    const ids = (q.options as Record<string, unknown>[]).map((o) => o.id);
+    if (!['A','B','C','D'].every((x) => ids.includes(x))) {
+      errors.push('options must have id A, B, C, and D');
+    }
+    (q.options as Record<string, unknown>[]).forEach((o, i) => {
+      if (typeof o.text !== 'string' || !(o.text as string).trim()) {
+        errors.push(`option ${i + 1} text is empty`);
+      }
+    });
+  }
+
+  // correctOption
+  if (!['A','B','C','D'].includes(q.correctOption as string)) {
+    errors.push('correctOption must be A, B, C, or D');
+  }
+
+  // explanation (optional)
+  if (q.explanation !== undefined && typeof q.explanation !== 'string') {
+    errors.push('explanation must be a string if provided');
+  }
+  if (typeof q.explanation === 'string' && q.explanation.length > 2000) {
+    errors.push('explanation must be ≤ 2000 characters');
+  }
+
+  return {
+    raw,
+    text:          typeof q.text === 'string' ? q.text : undefined,
+    correctOption: typeof q.correctOption === 'string' ? q.correctOption : undefined,
+    errors,
+  };
+}
+
+interface ImportModalProps {
+  onImport:    (questions: unknown[]) => Promise<void>;
+  onClose:     () => void;
+  importing:   boolean;
+  lastResult:  { count: number } | null;
+}
+
+function ImportModal({ onImport, onClose, importing, lastResult }: ImportModalProps) {
+  const fileRef   = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging]  = useState(false);
+  const [parseErr, setParseErr]  = useState<string | null>(null);
+  const [rows,     setRows]      = useState<ParsedQuestion[] | null>(null);
+  const [apiErr,   setApiErr]    = useState<string | null>(null);
+
+  const errorCount = rows ? rows.filter((r) => r.errors.length > 0).length : 0;
+  const allValid   = rows !== null && rows.length > 0 && errorCount === 0;
+
+  // ── Parse file ─────────────────────────────────────────────────────────────
+  const parseFile = (file: File) => {
+    setParseErr(null);
+    setRows(null);
+    setApiErr(null);
+
+    if (!file.name.endsWith('.json')) {
+      setParseErr('Only .json files are accepted.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = JSON.parse(ev.target?.result as string);
+
+        // Layer 2 — shape checks
+        if (!Array.isArray(parsed)) {
+          setParseErr('File must be a JSON array [ … ] at the top level.');
+          return;
+        }
+        if (parsed.length === 0) {
+          setParseErr('The array is empty — there are no questions to import.');
+          return;
+        }
+        if (parsed.length > 200) {
+          setParseErr(`Too many questions: ${parsed.length} found. Maximum is 200 per import.`);
+          return;
+        }
+
+        // Layer 3 — per-question validation
+        setRows(parsed.map((item, i) => validateQuestion(item, i)));
+      } catch {
+        // Layer 1 — invalid JSON syntax
+        setParseErr('Could not parse this file. Make sure it is valid JSON.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) parseFile(file);
+  };
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) parseFile(file);
+  };
+
+  const handleImportClick = async () => {
+    if (!rows || !allValid) return;
+    setApiErr(null);
+    try {
+      await onImport(rows.map((r) => r.raw));
+    } catch (err: unknown) {
+      setApiErr((err as Error).message);
+    }
+  };
+
+  return (
+    <div className="im-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="im-panel">
+        {/* Header */}
+        <div className="im-header">
+          <h2 className="im-title">⬆ Import Questions from JSON</h2>
+          <button className="im-close" onClick={onClose} aria-label="Close">×</button>
+        </div>
+
+        {/* Success banner */}
+        {lastResult && (
+          <div className="im-banner im-banner--ok">
+            ✅ {lastResult.count} question{lastResult.count !== 1 ? 's' : ''} imported successfully!
+            <button className="im-banner-close" onClick={onClose}>Done</button>
+          </div>
+        )}
+
+        {/* Drop zone */}
+        {!lastResult && (
+          <>
+            <div
+              className={`im-drop ${dragging ? 'im-drop--over' : ''}`}
+              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={onDrop}
+              onClick={() => fileRef.current?.click()}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && fileRef.current?.click()}
+            >
+              <span className="im-drop-icon">📂</span>
+              <span className="im-drop-label">Drop your <code>.json</code> file here, or click to browse</span>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".json,application/json"
+                style={{ display: 'none' }}
+                onChange={onFileChange}
+              />
+            </div>
+
+            {/* Layer 1 & 2 error banner */}
+            {parseErr && (
+              <div className="im-banner im-banner--err">
+                ❌ {parseErr}
+              </div>
+            )}
+
+            {/* Layer 4 API error banner */}
+            {apiErr && (
+              <div className="im-banner im-banner--err">
+                ❌ {apiErr}
+              </div>
+            )}
+
+            {/* Layer 3 — preview table */}
+            {rows && rows.length > 0 && (
+              <>
+                {errorCount > 0 && (
+                  <div className="im-banner im-banner--warn">
+                    ⚠️ {errorCount} question{errorCount !== 1 ? 's have' : ' has'} errors.
+                    Fix the file and re-upload.
+                  </div>
+                )}
+
+                <div className="im-table-wrap">
+                  <table className="im-table">
+                    <thead>
+                      <tr>
+                        <th className="im-th im-th--num">#</th>
+                        <th className="im-th">Question</th>
+                        <th className="im-th im-th--opt">Correct</th>
+                        <th className="im-th">Issues</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((row, i) => (
+                        <tr key={i} className={row.errors.length > 0 ? 'im-tr--err' : 'im-tr--ok'}>
+                          <td className="im-td im-td--num">{i + 1}</td>
+                          <td className="im-td im-td--text marathi-text">
+                            {row.text
+                              ? row.text.length > 80 ? row.text.slice(0, 80) + '…' : row.text
+                              : <span className="im-missing">—</span>}
+                          </td>
+                          <td className="im-td im-td--opt">
+                            {row.correctOption
+                              ? <span className="im-correct-chip">{row.correctOption}</span>
+                              : <span className="im-missing">—</span>}
+                          </td>
+                          <td className="im-td im-td--issues">
+                            {row.errors.length === 0 ? (
+                              <span className="im-ok">✅</span>
+                            ) : (
+                              <ul className="im-err-list">
+                                {row.errors.map((e, ei) => (
+                                  <li key={ei} className="im-err-item">❌ {e}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="im-footer">
+                  <button
+                    className="im-btn-import"
+                    onClick={handleImportClick}
+                    disabled={!allValid || importing}
+                    id="im-confirm-btn"
+                  >
+                    {importing
+                      ? 'Importing…'
+                      : allValid
+                        ? `Import ${rows.length} Question${rows.length !== 1 ? 's' : ''}`
+                        : `Fix ${errorCount} Error${errorCount !== 1 ? 's' : ''} First`}
+                  </button>
+                  <button className="im-btn-cancel" onClick={onClose}>Cancel</button>
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -817,10 +1134,10 @@ const styles = `
       border-right: none;
       border-bottom: 1px solid var(--border);
     }
-    .qe-btn-add { display: none; }
-    .qe-btn-add-mobile {
+    .qe-bottom-btns { display: none; }
+    .qe-btn-add-mobile, .qe-btn-import-mobile {
       display: block;
-      padding: 7px 12px;
+      padding: 7px 10px;
       border-radius: 8px;
       border: 1px solid var(--border);
       background: var(--bg-active);
@@ -837,5 +1154,220 @@ const styles = `
       display: block;
     }
     .qe-form-close { display: flex; }
+  }
+
+  /* ── Desktop bottom buttons ── */
+  .qe-bottom-btns {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px;
+    flex-shrink: 0;
+  }
+  .qe-btn-import {
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px dashed var(--border);
+    background: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+    text-align: center;
+  }
+  .qe-btn-import:hover { border-color: var(--accent-bg); color: var(--accent-text); }
+
+  /* Mobile import button (hidden on desktop) */
+  .qe-btn-import-mobile { display: none; }
+
+  /* ─── Import Modal ────────────────────────────────────────────────────── */
+  .im-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 16px;
+  }
+  .im-panel {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 680px;
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+  }
+  .im-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .im-title { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+  .im-close {
+    font-size: 20px;
+    line-height: 1;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px 8px;
+    font-family: inherit;
+    transition: color 0.15s;
+  }
+  .im-close:hover { color: var(--text-primary); }
+
+  /* Drop zone */
+  .im-drop {
+    margin: 16px 20px 0;
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 28px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .im-drop:hover, .im-drop--over {
+    border-color: var(--accent-bg);
+    background: color-mix(in srgb, var(--accent-bg) 6%, transparent);
+  }
+  .im-drop-icon  { font-size: 28px; }
+  .im-drop-label { font-size: 12px; color: var(--text-secondary); text-align: center; }
+  .im-drop-label code { font-size: 11px; background: var(--bg-surface-2); padding: 1px 5px; border-radius: 4px; }
+
+  /* Banners */
+  .im-banner {
+    margin: 10px 20px 0;
+    padding: 9px 14px;
+    border-radius: 9px;
+    font-size: 12px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .im-banner--ok   { background: var(--success-bg); border: 1px solid var(--success-border); color: var(--success-text); }
+  .im-banner--err  { background: var(--danger-bg);  border: 1px solid var(--danger-border);  color: var(--danger-text);  }
+  .im-banner--warn { background: var(--warn-bg);    border: 1px solid var(--warn-border);    color: var(--warn-text);    }
+  .im-banner-close {
+    margin-left: auto;
+    padding: 5px 12px;
+    border-radius: 7px;
+    border: 1px solid var(--success-border);
+    background: var(--success-text);
+    color: #0a0a0a;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  /* Preview table */
+  .im-table-wrap {
+    flex: 1;
+    overflow-y: auto;
+    margin: 10px 20px 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    min-height: 0;
+  }
+  .im-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .im-th {
+    padding: 8px 10px;
+    text-align: left;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    background: var(--bg-surface-2);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+  }
+  .im-th--num { width: 36px; }
+  .im-th--opt { width: 60px; }
+  .im-td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    color: var(--text-secondary);
+  }
+  .im-td--num  { color: var(--text-muted); font-size: 11px; font-weight: 600; text-align: center; }
+  .im-td--text { max-width: 240px; line-height: 1.4; }
+  .im-td--opt  { text-align: center; }
+  .im-td--issues { min-width: 180px; }
+  .im-tr--ok  td { background: transparent; }
+  .im-tr--err td { background: color-mix(in srgb, var(--danger-bg) 40%, transparent); }
+  .im-missing  { color: var(--text-muted); font-style: italic; }
+  .im-ok       { color: var(--success-text); font-size: 13px; }
+  .im-correct-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px; height: 22px;
+    border-radius: 5px;
+    background: var(--success-bg);
+    color: var(--success-text);
+    border: 1px solid var(--success-border);
+    font-size: 10px;
+    font-weight: 800;
+  }
+  .im-err-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+  .im-err-item { font-size: 11px; color: var(--danger-text); }
+
+  /* Footer */
+  .im-footer {
+    display: flex;
+    gap: 8px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .im-btn-import {
+    flex: 1;
+    padding: 11px;
+    border-radius: 9px;
+    border: none;
+    background: var(--accent-bg);
+    color: var(--accent-text);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: opacity 0.15s;
+  }
+  .im-btn-import:disabled { opacity: 0.5; cursor: not-allowed; }
+  .im-btn-cancel {
+    padding: 11px 20px;
+    border-radius: 9px;
+    border: 1px solid var(--border);
+    background: var(--bg-surface-2);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
   }
 `;

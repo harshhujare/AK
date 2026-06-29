@@ -558,6 +558,90 @@ testsRouter.post('/:id/questions', requireAdmin(), async (req: Request, res: Res
 });
 
 /**
+ * POST /api/tests/:id/questions/bulk
+ * Imports multiple questions from a JSON array in one atomic transaction.
+ *
+ * Body: { questions: CreateQuestionInput[] }  (1–200 items)
+ *
+ * Behaviour:
+ *  - Validates EVERY question with CreateQuestionSchema before touching the DB.
+ *  - If any question fails, returns 400 with per-index error details (no DB write).
+ *  - Auto-assigns `order` starting from (currentMaxOrder + 1) so imported
+ *    questions always append after existing ones.
+ *  - Wraps the createMany in a prisma.$transaction so it's all-or-nothing.
+ */
+testsRouter.post('/:id/questions/bulk', requireAdmin(), async (req: Request, res: Response) => {
+  const testId = String(req.params.id);
+
+  // ── 1. Basic shape check ─────────────────────────────────────────────────────
+  const raw: unknown = req.body.questions;
+  if (!Array.isArray(raw)) {
+    res.status(400).json({ error: 'Body must contain a "questions" array.' });
+    return;
+  }
+  if (raw.length === 0) {
+    res.status(400).json({ error: 'questions array is empty.' });
+    return;
+  }
+  if (raw.length > 200) {
+    res.status(400).json({ error: 'Too many questions. Maximum 200 per import.' });
+    return;
+  }
+
+  // ── 2. Validate every question with the shared schema ────────────────────────
+  const validationErrors: { index: number; issues: string[] }[] = [];
+  const validQuestions: ReturnType<typeof CreateQuestionSchema.parse>[] = [];
+
+  for (let i = 0; i < raw.length; i++) {
+    const result = CreateQuestionSchema.safeParse(raw[i]);
+    if (result.success) {
+      validQuestions.push(result.data);
+    } else {
+      validationErrors.push({
+        index: i,
+        issues: result.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`),
+      });
+    }
+  }
+
+  if (validationErrors.length > 0) {
+    res.status(400).json({
+      error: `${validationErrors.length} question(s) failed validation. No questions were saved.`,
+      validationErrors,
+    });
+    return;
+  }
+
+  // ── 3. Verify the test exists ────────────────────────────────────────────────
+  const test = await prisma.test.findUnique({ where: { id: testId }, select: { id: true } });
+  if (!test) {
+    res.status(404).json({ error: 'Test not found.' });
+    return;
+  }
+
+  // ── 4. Determine starting order (append after existing questions) ─────────────
+  const maxOrderRow = await prisma.question.findFirst({
+    where:   { testId },
+    orderBy: { order: 'desc' },
+    select:  { order: true },
+  });
+  const startOrder = (maxOrderRow?.order ?? -1) + 1;
+
+  // ── 5. Atomic insert ─────────────────────────────────────────────────────────
+  const data = validQuestions.map((q, i) => ({
+    ...q,
+    testId,
+    order: startOrder + i,
+  }));
+
+  const result = await prisma.$transaction(async (tx) => {
+    return tx.question.createMany({ data });
+  });
+
+  res.status(201).json({ data: { count: result.count } });
+});
+
+/**
  * PUT /api/tests/:testId/questions/:qId
  * Edits an existing question (text, options, correctOption, explanation, order).
  *
