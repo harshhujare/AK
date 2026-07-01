@@ -10,6 +10,8 @@
   --bg-page: #0a0a0a;
   --bg-surface: #111111;
   --bg-surface-2: #1a1a1a;
+  --bg-card: #141414;
+  --bg-subtle: rgba(255, 255, 255, 0.03);
   --bg-hover: rgba(255, 255, 255, 0.05);
   --bg-active: rgba(255, 255, 255, 0.08);
 
@@ -24,6 +26,7 @@
   --text-placeholder: rgba(255, 255, 255, 0.2);
 
   /* Accent (call-to-actions) */
+  --accent: #ffffff;
   --accent-bg: #ffffff;
   --accent-text: #0a0a0a;
 
@@ -58,6 +61,8 @@
   --bg-page: #f5f4f0;
   --bg-surface: #ffffff;
   --bg-surface-2: #f0eeea;
+  --bg-card: #ffffff;
+  --bg-subtle: rgba(0, 0, 0, 0.02);
   --bg-hover: rgba(0, 0, 0, 0.04);
   --bg-active: rgba(0, 0, 0, 0.07);
 
@@ -72,6 +77,7 @@
   --text-placeholder: rgba(0, 0, 0, 0.25);
 
   /* Accent */
+  --accent: #111111;
   --accent-bg: #111111;
   --accent-text: #ffffff;
 
@@ -138,6 +144,16 @@ body {
 /* ── Typography util ──────────────────────────────────────────────────────── */
 .font-serif {
   font-family: var(--font-serif), 'Playfair Display', serif;
+}
+
+/* ── Animations ───────────────────────────────────────────────────────────── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
 }
 
 /* ── Scrollbar ────────────────────────────────────────────────────────────── */

@@ -62,9 +62,9 @@ function LoginContent() {
           </Suspense>
         </div>
 
-        <div className="login-divider">
-          <span>Only Google Sign-In is supported</span>
-        </div>
+        <p className="login-only-google">
+          Only Google Sign-In is supported at this time.
+        </p>
 
         <p className="login-note">
           By signing in, you agree to our{' '}
@@ -200,26 +200,11 @@ function LoginContent() {
           animation: pulse 1.5s ease-in-out infinite;
         }
 
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-
-        .login-divider {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          margin-bottom: 1.5rem;
-          color: var(--text-muted);
+        .login-only-google {
           font-size: 0.75rem;
-        }
-
-        .login-divider::before,
-        .login-divider::after {
-          content: '';
-          flex: 1;
-          height: 1px;
-          background: var(--border);
+          color: var(--text-muted);
+          text-align: center;
+          margin-bottom: 1.25rem;
         }
 
         .login-note {

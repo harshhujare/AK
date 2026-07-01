@@ -99,9 +99,9 @@ export function QuestionDotGrid({
           border-color: var(--accent-bg);
         }
         .qdot--answered {
-          background: var(--bg-active);
-          border-color: var(--border-strong);
-          color: var(--text-secondary);
+          background: var(--success-bg);
+          border-color: var(--success-border);
+          color: var(--success-text);
         }
         .qdot--correct {
           background: var(--success-bg);

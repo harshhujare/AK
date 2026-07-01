@@ -3,7 +3,6 @@
 > An ed-tech platform for TET exam preparation — built for Ajit Kambale sir's audience.
 > Think Physics Wallah, but focused on Maharashtra TET/CTET with a strong community at its core.
 
-
 ## 1. Project Overview
 
 AjitSir Academy is a full-stack web platform where students can:
@@ -12,26 +11,25 @@ AjitSir Academy is a full-stack web platform where students can:
 - (Future) Watch recorded lectures and live classes
 - (Future) Participate in leaderboards, doubt forums, and live quizzes
 
-The platform has two user roles:
+The platform has multiple user roles:
 - **Student** — signs up, takes tests, downloads notes, manages their subscription
-- **Admin (Ajit sir / team)** — uploads content, manages question banks, views analytics
-
+- **Support Manager** — manages support tickets and user queries
+- **Content Manager** — manages tests, notes, and subjects
+- **Super Admin (Ajit sir / team)** — full access, analytics, user management
 
 ## 2. Tech Stack
 
 | Layer | Technology | Reason |
 |---|---|---|
-| Frontend | Next.js 14 (App Router) | SSR, SEO, fast page loads |
-| Styling | Tailwind CSS + shadcn/ui | Consistent, accessible components |
+| Frontend | Next.js 16 (App Router) | SSR, SEO, fast page loads |
+| Styling | Tailwind CSS v4 + shadcn/ui | Consistent, accessible components |
 | State | Zustand + React Query | Client state + server data caching |
-| Backend | Node.js + Express  | REST API, lightweight, scalable |
-
-| Database | PostgreSQL | Relational data — users, tests, results |
+| Backend | Node.js + Express | REST API, lightweight, scalable |
+| Database | Neon Serverless Postgres | Relational data — users, tests, results |
 | File storage | Cloudflare R2 (S3-compatible) | PDFs, images; cheaper than S3 |
-| Auth | NextAuth.js (or Clerk) | Google OAuth + email/password |
+| Auth | Google OAuth + email/password | JWT-based authentication |
 | Payments | Razorpay | UPI + card + wallet + subscriptions |
-| Cache | Redis | Sessions, rate limiting, leaderboard cache |
-
+| Cache | node-cache | In-memory cache for sessions and rate limiting |
 | Hosting | Vercel (frontend) + Railway (backend) | Easy deploys, generous free tiers |
 | CDN / DNS | Cloudflare | Global edge, DDoS protection |
 
@@ -39,28 +37,20 @@ The platform has two user roles:
 
 ## 3. Folder Structure
 
-```
+```text
 ajitsir-academy/
 ├── apps/
 │   ├── web/                  # Next.js frontend
 │   │   ├── app/              # App Router pages
-│   │   │   ├── (auth)/       # Login, register, forgot password
-│   │   │   ├── (student)/    # Dashboard, tests, notes, profile
-│   │   │   ├── (admin)/      # Admin panel — upload content, analytics
-│   │   │   └── api/          # Next.js API routes (auth, webhooks)
 │   │   ├── components/       # Reusable UI components
-│   │   │   ├── ui/           # shadcn/ui base components
-│   │   │   ├── test/         # MCQ engine, timer, result card
-│   │   │   ├── notes/        # PDF viewer, download button
-│   │   │   └── layout/       # Navbar, sidebar, footer
 │   │   ├── lib/              # Utilities, hooks, API clients
 │   │   └── public/           # Static assets, icons
 │   │
 │   └── api/                  # Express backend
 │       ├── src/
-│       │   ├── routes/       # Auth, tests, notes, payments, admin
+│       │   ├── routes/       # Auth, tests, notes, payments, admin, support, etc.
 │       │   ├── controllers/  # Business logic per route
-│       │   ├── middleware/    # Auth guard, rate limiter, file upload
+│       │   ├── middleware/   # Auth guard, rate limiter, file upload
 │       │   ├── services/     # Razorpay, R2 storage, email
 │       │   └── utils/        # Helpers, validators
 │       └── prisma/
@@ -69,7 +59,7 @@ ajitsir-academy/
 ├── packages/
 │   └── shared/               # Shared types and constants (TypeScript)
 │
-└── docker-compose.yml        # Local dev: Postgres + Redis
+└── docker-compose.yml        # Local dev: Postgres
 ```
 
 ---
@@ -79,74 +69,180 @@ ajitsir-academy/
 Key models — the agent should use these as the source of truth when generating backend code.
 
 ```prisma
-model User {
-  id            String       @id @default(cuid())
-  name          String
-  email         String       @unique
-  passwordHash  String?
-  googleId      String?      @unique
-  role          Role         @default(STUDENT)
-  plan          Plan         @default(FREE)
-  planExpiresAt DateTime?
-  createdAt     DateTime     @default(now())
-  attempts      TestAttempt[]
-  payments      Payment[]
+// This is the Prisma schema for AjitSir Academy
+// Source of truth for all database models
+
+generator client {
+  provider = "prisma-client-js"
 }
 
-enum Role  { STUDENT ADMIN }
-enum Plan  { FREE PAID }
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ─────────────────────────────────────────────────────────────────────
+
+enum Role {
+  STUDENT
+  SUPPORT_MANAGER
+  CONTENT_MANAGER
+  SUPER_ADMIN
+}
+
+enum Plan {
+  FREE
+  PAID
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum AnnouncementType {
+  IMAGE
+  VIDEO
+}
+
+enum TestType {
+  DAILY       // One per day — scheduledAt = that calendar day
+  PREDEFINED  // Manually scheduled with a specific date window
+  SUBJECT     // Always available, filtered by subject
+}
+
+enum NoteAccessType {
+  TIMED     // access expires with user's planExpiresAt
+  LIFETIME  // access granted forever once user has ever successfully paid
+}
+
+// ─── Models ────────────────────────────────────────────────────────────────────
+
+model User {
+  id            String        @id @default(cuid())
+  name          String
+  email         String        @unique
+  passwordHash  String?
+  googleId      String?       @unique
+  role          Role          @default(STUDENT)
+  plan          Plan          @default(FREE)
+  planExpiresAt DateTime?
+  paidAt        DateTime?     // set once on first successful payment, never cleared
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  attempts       TestAttempt[]
+  payments       Payment[]
+  noteViews      NoteView[]
+  supportTickets SupportTicket[]
+  ticketReplies  TicketReply[]
+}
 
 model Subject {
-  id        String    @id @default(cuid())
-  name      String                          // e.g. "Child Development"
-  tests     Test[]
-  notes     Note[]
+  id            String         @id @default(cuid())
+  name          String         @unique
+  nameMarathi   String?        // Marathi translation of subject name
+  order         Int            @default(0)
+  tests         Test[]
+  notes         Note[]
 }
 
 model Test {
-  id          String       @id @default(cuid())
+  id          String        @id @default(cuid())
   title       String
   description String?
   subjectId   String
-  subject     Subject      @relation(fields: [subjectId], references: [id])
-  isPaid      Boolean      @default(false)
+  subject     Subject       @relation(fields: [subjectId], references: [id])
+  isPaid      Boolean       @default(false)
   questions   Question[]
   attempts    TestAttempt[]
-  createdAt   DateTime     @default(now())
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // ── Test type & scheduling ──────────────────────────────────────────────────
+  type         TestType  @default(SUBJECT)
+  timeLimitSec Int?      // null = untimed. 1800 = 30 min, 2700 = 45 min
+  scheduledAt  DateTime? // DAILY: date it is live. PREDEFINED: window start.
+  expiresAt    DateTime? // PREDEFINED only: when the window closes.
+  isPublished  Boolean   @default(false) // false = draft, invisible to students
+
+  // ── Performance indexes ─────────────────────────────────────────────────────
+  @@index([type, scheduledAt])
+  @@index([subjectId, isPublished])
 }
 
 model Question {
-  id            String   @id @default(cuid())
+  id            String  @id @default(cuid())
   testId        String
-  test          Test     @relation(fields: [testId], references: [id])
+  test          Test    @relation(fields: [testId], references: [id], onDelete: Cascade)
   text          String
-  options       Json     // [{ id: "A", text: "..." }, ...]
-  correctOption String   // "A" | "B" | "C" | "D"
+  options       Json    // [{ id: "A", text: "..." }, ...]
+  correctOption String  // "A" | "B" | "C" | "D"
   explanation   String?
   order         Int
 }
 
 model TestAttempt {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  testId      String
-  test        Test     @relation(fields: [testId], references: [id])
-  answers     Json     // { questionId: selectedOption }
-  score       Int
-  totalMarks  Int
-  timeTaken   Int      // seconds
-  completedAt DateTime @default(now())
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  testId           String
+  test             Test     @relation(fields: [testId], references: [id])
+  answers          Json     // { questionId: selectedOption }
+  score            Int
+  totalMarks       Int
+  timeTaken        Int?     // seconds — null for untimed test submissions
+  completedAt      DateTime @default(now())
+
+  clientAttemptId  String?  // nullable — idempotency key
+
+  @@index([testId, score])
+  @@index([userId, completedAt])
+  @@unique([userId, clientAttemptId])
 }
 
 model Note {
-  id        String   @id @default(cuid())
-  title     String
-  subjectId String
-  subject   Subject  @relation(fields: [subjectId], references: [id])
-  fileKey   String   // Cloudflare R2 object key
-  isPaid    Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id           String         @id @default(cuid())
+  title        String
+  description  String?
+  subjectId    String
+  subject      Subject        @relation(fields: [subjectId], references: [id])
+  fileKey      String         // AWS S3 object key
+  isPaid       Boolean        @default(false)
+  accessType   NoteAccessType @default(TIMED)
+  pageCount    Int?
+  thumbnailKey String?        // S3 key of thumbnail image
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  views        NoteView[]
+
+  @@index([subjectId])
+}
+
+model NoteView {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id])
+  noteId   String
+  note     Note     @relation(fields: [noteId], references: [id])
+  viewedAt DateTime @default(now())
+
+  @@index([noteId])
+  @@index([userId])
+}
+
+model Announcement {
+  id          String           @id @default(cuid())
+  title       String
+  description String?
+  type        AnnouncementType @default(IMAGE)
+  youtubeUrl  String?
+  imageKey    String?
+  isActive    Boolean          @default(true)
+  order       Int              @default(0)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 }
 
 model Payment {
@@ -157,11 +253,79 @@ model Payment {
   razorpayPaymentId String?
   amount            Int           // in paise
   status            PaymentStatus @default(PENDING)
-  planDuration      Int           // days (e.g. 30, 365)
+  planDuration      Int           // days
   createdAt         DateTime      @default(now())
 }
 
-enum PaymentStatus { PENDING SUCCESS FAILED REFUNDED }
+model PlanConfig {
+  id           String   @id @default(cuid())
+  planDuration Int      @unique
+  price        Int
+  label        String
+  description  String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("plan_config")
+}
+
+model FAQ {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String
+  category  String
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@index([isActive])
+}
+
+enum TicketType {
+  BUG_REPORT
+  PAYMENT_ISSUE
+  CONTENT_QUERY
+  GENERAL
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+model SupportTicket {
+  id        String        @id @default(cuid())
+  type      TicketType
+  status    TicketStatus  @default(OPEN)
+  subject   String
+  message   String
+  paymentId String?
+  orderId   String?
+  userId    String
+  user      User          @relation(fields: [userId], references: [id])
+  replies   TicketReply[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([type])
+}
+
+model TicketReply {
+  id           String        @id @default(cuid())
+  message      String
+  isStaffReply Boolean       @default(false)
+  ticketId     String
+  ticket       SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId     String
+  author       User          @relation(fields: [authorId], references: [id])
+  createdAt    DateTime      @default(now())
+}
 ```
 
 ---
@@ -185,17 +349,17 @@ enum PaymentStatus { PENDING SUCCESS FAILED REFUNDED }
 | GET | `/:id` | Student | Get test with questions (gated if isPaid) |
 | POST | `/:id/attempt` | Student | Submit answers, receive score + breakdown |
 | GET | `/attempts/me` | Student | Student's own attempt history |
-| POST | `/` | Admin | Create new test |
-| PUT | `/:id` | Admin | Update test |
-| DELETE | `/:id` | Admin | Delete test |
+| POST | `/` | Content Manager/Admin | Create new test |
+| PUT | `/:id` | Content Manager/Admin | Update test |
+| DELETE | `/:id` | Content Manager/Admin | Delete test |
 
 ### Notes  `/api/notes`
 | Method | Route | Auth | Description |
 |---|---|---|---|
 | GET | `/` | Public | List notes (title, subject, isPaid) |
 | GET | `/:id/download` | Student | Generate signed R2 URL (gated if isPaid) |
-| POST | `/` | Admin | Upload PDF to R2, save metadata |
-| DELETE | `/:id` | Admin | Delete note |
+| POST | `/` | Content Manager/Admin | Upload PDF to R2, save metadata |
+| DELETE | `/:id` | Content Manager/Admin | Delete note |
 
 ### Payments  `/api/payments`
 | Method | Route | Auth | Description |
@@ -211,6 +375,12 @@ enum PaymentStatus { PENDING SUCCESS FAILED REFUNDED }
 | GET | `/users` | Admin | Paginated user list |
 | PATCH | `/users/:id/plan` | Admin | Manually upgrade/downgrade plan |
 
+### Other Endpoints
+- `/api/announcements` — Manage and fetch announcements.
+- `/api/faqs` — Manage and fetch FAQs.
+- `/api/subjects` — Manage test/note subjects.
+- `/api/support` — Create and reply to support tickets.
+
 ---
 
 ## 6. Key Feature Specs
@@ -224,7 +394,7 @@ The test-taking flow works as follows:
 3. On submit, POST `/api/tests/:id/attempt` sends `{ answers: { [questionId]: selectedOption } }`.
 4. Backend scores the attempt server-side (never trust client-side scoring).
 5. Response includes: score, total, percentage, per-question breakdown with explanation.
-6. Result is saved to `TestAttempt` table.
+6. Result is saved to `TestAttempt` table. Includes an idempotency key to prevent double submits.
 7. Student can review their past attempts from the dashboard.
 
 **Important:** Correct answers must never be sent to the frontend before submission. Only send them in the attempt result response.
@@ -245,31 +415,30 @@ The test-taking flow works as follows:
 4. On success, Razorpay returns `{ razorpayPaymentId, razorpayOrderId, razorpaySignature }`.
 5. Frontend sends these to `POST /api/payments/verify`.
 6. Backend verifies HMAC signature using the Razorpay secret key.
-7. If valid, update `user.plan = PAID` and `user.planExpiresAt = now + planDuration days`.
+7. If valid, update `user.plan = PAID`, set `user.paidAt`, and update `user.planExpiresAt`.
 8. Also handle `payment.captured` and `payment.failed` events via the Razorpay webhook.
 
-### 6.4 Admin Content Upload
+### 6.4 Content Upload (Notes & Announcements)
 
-- Admin uploads a PDF via the admin panel.
-- Frontend sends the file to `POST /api/notes` as `multipart/form-data`.
-- Backend uses `multer` + a Cloudflare R2 SDK (AWS SDK v3 with custom endpoint) to stream the file directly to R2.
+- Admin/Content Manager uploads files (PDF/Images) via the panel.
+- Frontend sends the file as `multipart/form-data`.
+- Backend uses `multer` + `@aws-sdk/client-s3` to stream the file directly to R2.
 - Only the `fileKey` (R2 object key) is stored in the database — not a public URL.
 
 ---
 
 ## 7. Auth & Authorization Rules
 
-| Resource | FREE student | PAID student | Admin |
-|---|---|---|---|
-| List tests | ✅ | ✅ | ✅ |
-| Take free test | ✅ | ✅ | ✅ |
-| Take paid test | ❌ | ✅ | ✅ |
-| Download free notes | ✅ | ✅ | ✅ |
-| Download paid notes | ❌ | ✅ | ✅ |
-| View own attempts | ✅ | ✅ | ✅ |
-| Admin panel | ❌ | ❌ | ✅ |
+| Resource | FREE student | PAID student | Support Manager | Content Manager | Super Admin |
+|---|---|---|---|---|---|
+| List tests/notes | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Take paid test / Paid Notes| ❌ | ✅ | ✅ | ✅ | ✅ |
+| View own attempts | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Reply to support tickets | ❌ | ❌ | ✅ | ❌ | ✅ |
+| Manage tests/notes/subjects | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Admin panel / Stats | ❌ | ❌ | ❌ | ❌ | ✅ |
 
-Use a middleware `requireAuth(roles?: Role[], plan?: Plan)` on protected routes.
+Use a middleware `requireAuth(roles?: Role[])` on protected routes.
 
 ---
 
@@ -283,9 +452,6 @@ FRONTEND_URL=http://localhost:3000
 
 # Database
 DATABASE_URL=postgresql://user:password@localhost:5432/ajitsir_academy
-
-# Redis
-REDIS_URL=redis://localhost:6379
 
 # JWT
 JWT_SECRET=your_jwt_secret_here
@@ -322,7 +488,7 @@ cd ajitsir-academy
 # 2. Install dependencies
 npm install
 
-# 3. Start Postgres + Redis locally
+# 3. Start Postgres locally (or use Neon Postgres remote URL)
 docker-compose up -d
 
 # 4. Copy env files
@@ -334,7 +500,7 @@ cd apps/api
 npx prisma migrate dev
 
 # 6. Seed test data (optional)
-npx prisma db seed
+npm run db:seed
 
 # 7. Start both apps
 cd ../../
@@ -345,18 +511,21 @@ npm run dev   # runs web on :3000 and api on :4000
 
 ## 10. Phase Roadmap
 
-### Phase 1 — MVP (Build this first)
-- [ ] User auth (Google + email/password)
-- [ ] Subject & test management (admin)
-- [ ] MCQ test engine with timer and auto-scoring
-- [ ] Test attempt history + result review
-- [ ] Notes upload (admin) + download (student)
-- [ ] Free vs paid content gating
-- [ ] Razorpay subscription payment
-- [ ] Basic student dashboard
-- [ ] Basic admin dashboard with stats
+### Phase 1 — MVP (Completed)
+- [x] User auth (Google + email/password)
+- [x] Subject & test management (admin)
+- [x] MCQ test engine with timer and auto-scoring
+- [x] Test attempt history + result review
+- [x] Notes upload (admin) + download (student)
+- [x] Free vs paid content gating
+- [x] Razorpay subscription payment
+- [x] Basic student dashboard
+- [x] Basic admin dashboard with stats
 
-### Phase 2 — Growth
+### Phase 2 — Growth & Management (Current)
+- [x] Multiple admin roles (Content Manager, Support Manager)
+- [x] Support ticket system
+- [x] Announcements and FAQs
 - [ ] Leaderboard (top scorers per test)
 - [ ] Email notifications (welcome, payment receipt, test result)
 - [ ] Performance analytics per student (weak topics, progress over time)

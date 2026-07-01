@@ -50,7 +50,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="mr" className={`${playfair.variable} ${dmSans.variable} ${notoDevanagari.variable}`} data-theme="light" suppressHydrationWarning>
+    <html lang="mr" className={`${playfair.variable} ${dmSans.variable} ${notoDevanagari.variable}`} suppressHydrationWarning>
       <head>
         <link rel="offline" href="/offline.html" />
         <link rel="manifest" href="/manifest.json" />

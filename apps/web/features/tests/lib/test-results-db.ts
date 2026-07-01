@@ -103,9 +103,12 @@ export async function saveResult(stored: Omit<StoredResult, 'savedAt'>): Promise
 
   if (blob.length > MAX_BYTES) {
     // Graceful degradation: store without per-question breakdown
-    const resultWithoutBreakdown = { ...stored.result, breakdown: undefined };
+    // breakdown is typed as optional on AttemptResult so no cast needed
+    const { breakdown: _stripped, ...resultWithoutBreakdown } = stored.result;
+    void _stripped; // intentionally removed to reduce size
     entry = { ...entry, result: resultWithoutBreakdown as typeof stored.result };
     blob = JSON.stringify(entry);
+
 
     if (blob.length > MAX_BYTES) {
       // Still too large (pathological case) — log and skip

@@ -88,7 +88,7 @@ export interface AttemptBreakdownItem {
 
 export interface AttemptResult extends TestAttempt {
   percentage: number;
-  breakdown: AttemptBreakdownItem[];
+  breakdown?: AttemptBreakdownItem[]; // optional — may be stripped when stored offline (size limit)
 }
 
 export interface PercentileResult {

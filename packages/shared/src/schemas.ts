@@ -43,7 +43,7 @@ export const CreateQuestionSchema = z.object({
   options:       z.array(QuestionOptionSchema).length(4), // exactly 4 options
   correctOption: z.enum(['A', 'B', 'C', 'D']),
   explanation:   z.string().max(2000).optional(),
-  order:         z.number().int().min(0),
+  order:         z.number().int().min(0).optional().default(0), // optional — bulk import auto-assigns
 });
 
 export const SubmitAttemptSchema = z.object({

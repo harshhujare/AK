@@ -159,7 +159,7 @@ export default function PricingPage() {
               plan={plan}
               isLoading={checkoutState.status === 'creating_order'}
               disabled={isCheckoutActive || isActivePaid}
-              statusText={statusText || (isActivePaid ? undefined : undefined)}
+              statusText={statusText}
               onSelect={(duration) => checkout(duration.toString() as PlanDuration)}
             />
           ))}
@@ -187,7 +187,7 @@ export default function PricingPage() {
 
         .pricing-title {
           font-size: clamp(2.5rem, 5vw, 4rem);
-          font-weight: 800;
+          font-weight: 700;
           margin-bottom: 1rem;
           letter-spacing: -0.02em;
         }
@@ -227,15 +227,15 @@ export default function PricingPage() {
         }
 
         .active-plan-banner {
-          background: #ecfdf5;
-          border: 1px solid #a7f3d0;
-          color: #065f46;
+          background: var(--success-bg);
+          border: 1px solid var(--success-border);
+          color: var(--success-text);
         }
 
         .expired-plan-banner {
-          background: #fffbeb;
-          border: 1px solid #fde68a;
-          color: #92400e;
+          background: var(--warn-bg);
+          border: 1px solid var(--warn-border);
+          color: var(--warn-text);
         }
 
         .banner-icon {
@@ -260,11 +260,11 @@ export default function PricingPage() {
         }
 
         .error-message {
-          color: #ef4444;
-          background: #fef2f2;
+          color: var(--danger-text);
+          background: var(--danger-bg);
           padding: 1rem 1.5rem;
           border-radius: 8px;
-          border: 1px solid #fecaca;
+          border: 1px solid var(--danger-border);
           max-width: 420px;
           text-align: center;
           margin-top: 1rem;

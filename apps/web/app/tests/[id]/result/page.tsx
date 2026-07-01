@@ -87,14 +87,14 @@ export default function ResultPage() {
       setLoadingIDB(false);
       setNeedsServerFallback(true);
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [testId, attemptId]);
+  }, [testId, attemptId, isQueued, isError]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Hydrate from server fallback ────────────────────────────────────────────
+  // ── Hydrate from server fallback ────────────────────────────────────────────────────────
   useEffect(() => {
-    if (serverResult.data && !result) {
-      setResult(serverResult.data);
-      setBreakdown(serverResult.data.breakdown ?? null);
+    const data = serverResult.data;
+    if (data && !result) {
+      setResult(data);
+      setBreakdown(data.breakdown ?? null);
     }
   }, [serverResult.data, result]);
 

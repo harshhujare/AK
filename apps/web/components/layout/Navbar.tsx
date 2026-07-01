@@ -63,7 +63,7 @@ export default function Navbar() {
           <div className="navbar-links" role="list">
             <Link href="/pricing" className="navbar-link" role="listitem" style={{ color: 'var(--accent)', fontWeight: 600 }}>Pricing</Link>
             <Link href="/tests"   className={`navbar-link ${pathname.startsWith('/tests') ? 'navbar-link--active' : ''}`} role="listitem">Mock Tests</Link>
-            <Link href="/#notes"  className="navbar-link" role="listitem">Notes</Link>
+            <Link href="/notes"   className={`navbar-link ${pathname.startsWith('/notes') ? 'navbar-link--active' : ''}`} role="listitem">Notes</Link>
             <Link href="/#about"  className="navbar-link" role="listitem">About</Link>
             <Link href="/help"    className="navbar-link" role="listitem">Help</Link>
           </div>
@@ -559,12 +559,6 @@ export default function Navbar() {
         }
 
         /* Skeletons */
-        @keyframes pulse {
-          0% { opacity: 0.6; }
-          50% { opacity: 0.3; }
-          100% { opacity: 0.6; }
-        }
-
         .navbar-auth-skeleton {
           display: flex;
           align-items: center;

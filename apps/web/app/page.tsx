@@ -268,7 +268,15 @@ export default function Home() {
 
       {/* ─── Footer ───────────────────────────────────────────────────────────── */}
       <footer className="footer">
-        <p>© {new Date().getFullYear()} AjitSir Academy. All rights reserved.</p>
+        <div className="footer-inner">
+          <p className="footer-copy">© {new Date().getFullYear()} AjitSir Academy. All rights reserved.</p>
+          <div className="footer-links">
+            <Link href="/help" className="footer-link">Help &amp; Support</Link>
+            <Link href="/pricing" className="footer-link">Pricing</Link>
+            <Link href="/terms" className="footer-link">Terms</Link>
+            <Link href="/privacy" className="footer-link">Privacy</Link>
+          </div>
+        </div>
       </footer>
 
       {/* ─── Secure PDF Viewer Modal ──────────────────────────────────────────── */}
@@ -293,7 +301,7 @@ export default function Home() {
           background: var(--bg-page);
         }
         .hero-container {
-          max-width: 1350px;
+          max-width: 1200px;
           margin: 0 auto;
         }
         .slider-skeleton {
@@ -479,18 +487,13 @@ export default function Home() {
           position: relative;
           border-radius: 24px;
           overflow: hidden;
-          background: linear-gradient(
-            160deg,
-            var(--bg-card) 0%,
-            var(--bg-subtle, var(--bg-card)) 100%
-          );
+          background: var(--bg-card);
           border: 1px solid var(--border);
           box-shadow:
             0 20px 60px rgba(0,0,0,0.12),
             0 4px 16px rgba(0,0,0,0.08);
           width: 100%;
           max-width: 380px;
-          /* subtle inner glow that adapts to dark/light */
           transition: box-shadow 0.3s;
         }
         .about-image-card:hover {
@@ -647,16 +650,40 @@ export default function Home() {
 
         /* Footer */
         .footer {
-          padding: 2rem;
-          text-align: center;
-          color: var(--text-muted);
-          font-size: 0.85rem;
+          padding: 2rem 1.5rem;
           border-top: 1px solid var(--border);
         }
+        .footer-inner {
+          max-width: 1200px;
+          margin: 0 auto;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 1rem;
+        }
+        .footer-copy {
+          color: var(--text-muted);
+          font-size: 0.85rem;
+        }
+        .footer-links {
+          display: flex;
+          gap: 1.5rem;
+          flex-wrap: wrap;
+        }
+        .footer-link {
+          color: var(--text-muted);
+          font-size: 0.8rem;
+          text-decoration: none;
+          transition: color 0.15s;
+        }
+        .footer-link:hover {
+          color: var(--text-secondary);
+        }
 
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
+        @media (max-width: 480px) {
+          .footer-inner { flex-direction: column; align-items: center; text-align: center; }
+          .footer-links { justify-content: center; gap: 1rem; }
         }
 
         @media (max-width: 900px) {
